@@ -96,10 +96,10 @@ verify(Defs, {{Name, InNames, OutNames}, Steps}) ->
             Error;
         {ok, {InStmts, OutStmts}} ->
             Ins = lists:zip(InNames, InStmts),
-            case verify_steps(Steps, maps:from_list(Ins), Defs) of
+            case verify_steps(Steps, maps:from_list(Ins), 0, Defs) of
                 {error, Error, Log} ->
                     {error, Error, Ins, Log};
-                {ok, Stmts, Log} ->
+                {ok, Stmts, _, Log} ->
                     OutStmts1 = [ maps:get(N,Stmts) || N <- OutNames],
 
                     case russell_def:match(InStmts ++ OutStmts, InStmts ++ OutStmts1, #{}) of
@@ -112,33 +112,37 @@ verify(Defs, {{Name, InNames, OutNames}, Steps}) ->
     end.
 
 
-verify_steps([], Stmts, _) ->
-    {ok, Stmts, []};
-verify_steps([{Name, In, _} = H|T], Stmts, Defs) ->
-    case verify_step(H, Stmts, Defs) of
+verify_steps([], Stmts, Counter, _) ->
+    {ok, Stmts, Counter, []};
+verify_steps([{Name, In, _} = H|T], Stmts, Counter, Defs) ->
+    case verify_step(H, Stmts, Counter, Defs) of
         {error, Error} ->
             {error, {{Name, In}, Error}, []};
-        {ok, Stmts1, Step} ->
-            {Tag, Value, Steps} = verify_steps(T, Stmts1, Defs),
-            {Tag, Value, [{{Name, In}, Step}|Steps]}
+        {ok, Stmts1, Counter1, Step} ->
+            case verify_steps(T, Stmts1, Counter1, Defs) of
+                {error, Error, Steps} ->
+                    {error, Error, [{{Name, In}, Step}|Steps]};
+                {ok, Stmts2, Counter2, Steps} ->
+                    {ok, Stmts2, Counter2, [{{Name, In}, Step}|Steps]}
+            end
     end.
 
 
-verify_step({Name, InNames, OutNames}, Stmts, Defs) ->
+verify_step({Name, InNames, OutNames}, Stmts, Counter, Defs) ->
     case russell_def:find(Name, length(InNames), length(OutNames), Defs) of
         {error, _} = Error ->
             Error;
         {ok, Def} ->
             InStmts = [ maps:get(N,Stmts) || N <- InNames],
-            case russell_def:apply(InStmts, Def) of
+            case russell_def:apply(InStmts, Def, Counter) of
                 {error, _} = Error ->
                     Error;
-                {ok, OutStmts} ->
+                {ok, OutStmts, Counter1} ->
                     Outs =
                         [ {N,V}
                           || {N,V} <- lists:zip(OutNames, OutStmts),
                              N =/= '_' ],
                     Stmts1 = maps:merge(Stmts, maps:from_list(Outs)),
-                    {ok, Stmts1, Outs}
+                    {ok, Stmts1, Counter1, Outs}
             end
     end.

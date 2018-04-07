@@ -54,5 +54,7 @@ format_token(List) when is_list(List) ->
     ["(", format_tokens(List), ")"];
 format_token({var, V}) when is_atom(V) ->
     atom_to_list(V);
+format_token({var, V}) when is_integer(V) ->
+    io_lib:format(".~B", [V]);
 format_token(A) ->
     atom_to_list(A).

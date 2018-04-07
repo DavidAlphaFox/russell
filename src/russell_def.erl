@@ -1,6 +1,6 @@
 -module(russell_def).
 
--export([file/1, find/4, match/3, apply/2]).
+-export([file/1, find/4, match/3, apply/3]).
 
 file(Filename) ->
     {ok, Bin} = file:read_file(Filename),
@@ -25,12 +25,13 @@ find(Name, NIn, NOut, Defs) ->
     end.
 
 
-apply(InStmts, {In, Out}) ->
+apply(InStmts, {In, Out}, C) ->
     case match(In, InStmts, #{}) of
         {error, _} = Error ->
             Error;
         Vars ->
-            {ok, subst(Out, Vars)}
+            {Stmts, _, C1} = subst(Out, Vars, C),
+            {ok, Stmts, C1}
     end.
 
 match([], [], Vars) ->
@@ -57,11 +58,18 @@ match(X1, X2, _) ->
     {error, {not_match, X1, X2}}.
 
 
-subst([], _) ->
-    [];
-subst([H|T], Vars) ->
-    [subst(H, Vars)|subst(T, Vars)];
-subst({var, V}, Vars) ->
-    maps:get(V, Vars);
-subst(A, _) ->
-    A.
+subst([], Vars, Counter) ->
+    {[], Vars, Counter};
+subst([H|T], Vars, Counter) ->
+    {H1, Vars1, Counter1} = subst(H, Vars, Counter),
+    {T1, Vars2, Counter2} = subst(T, Vars1, Counter1),
+    {[H1|T1], Vars2, Counter2};
+subst({var, V}, Vars, Counter) ->
+    case maps:find(V, Vars) of
+        error ->
+            {{var, Counter}, Vars#{V => {var, Counter}}, Counter+1};
+        {ok, Value} ->
+            {Value, Vars, Counter}
+    end;
+subst(A, Vars, Counter) ->
+    {A, Vars, Counter}.
