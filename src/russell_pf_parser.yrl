@@ -21,20 +21,23 @@ symbols -> '$empty':
   [].
 
 symbol -> atom:
-  mk_token('$1').
+  mk_symbol('$1').
 
 symbol -> var:
-  mk_token('$1').
+  mk_symbol('$1').
 
 symbol -> ignore:
-  mk_token('$1').
+  mk_symbol('$1').
 
 
 Erlang code.
 
 mk_token({atom, _, A}) ->
-    A;
-mk_token({var, _, V}) ->
-    V;
-mk_token({ignore, _}) ->
-    '_'.
+    A.
+
+mk_symbol({atom, Line, A}) ->
+    {A, Line};
+mk_symbol({var, Line, V}) ->
+    {V, Line};
+mk_symbol({ignore, Line}) ->
+    {'_', Line}.
