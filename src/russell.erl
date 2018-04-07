@@ -5,7 +5,7 @@
 main([Filename|Args]) ->
     case russell_def:file(Filename) of
         {ok, Defs} ->
-            run(maps:from_list(Defs), Args);
+            run(Defs, Args);
         {error, {L, M, E}} ->
             io:format("~s:~B: ~s~n", [Filename, L, M:format_error(E)])
     end.

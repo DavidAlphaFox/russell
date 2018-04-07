@@ -4,7 +4,12 @@
 
 file(Filename) ->
     {ok, Bin} = file:read_file(Filename),
-    parse(binary_to_list(Bin)).
+    case parse(binary_to_list(Bin)) of
+        {ok, Def} ->
+            {ok, maps:from_list(Def)};
+        Error ->
+            Error
+    end.
 
 parse(String) ->
     {ok, Tokens, _} = russell_lexer:string(String),
