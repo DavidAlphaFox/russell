@@ -5,10 +5,27 @@
   (P -> Q) = ((~ P) or Q),
 .
 
-=->
+=
+  prop P,
+: P = P,
+.
+
+==
   P = Q,
-  |- (Q -> R),
-: |- (P -> R),
+  Q = R,
+: P = R,
+.
+
+=->=
+  P = Q,
+  R = S,
+: (P -> R) = (Q -> S),
+.
+
+|-=
+  P = Q,
+  |- Q,
+: |- P,
 .
 
 1.1
@@ -53,13 +70,43 @@ sum
 : prop (~ P),
 .
 
+~=
+  P = Q,
+: (~ P) = (~ Q),
+.
+
 or
   prop P,
   prop Q,
 : prop (P or Q),
 .
 
+=or=
+  P = Q,
+  R = S,
+: (P or R) = (Q or S),
+.
+
 abs
   prop P,
 : |- ((P -> (~ P)) -> (~ P)),
+.
+
+simp
+  prop P,
+  prop Q,
+: |- (Q -> (P -> Q)),
+.
+
+transp~
+  prop P,
+  prop Q,
+: |- ((P -> (~ Q)) -> (Q -> (~ P))),
+.
+
+comm
+  prop P,
+  prop Q,
+  prop R,
+: |- ((P -> (Q -> R)) -> (Q -> (P -> R))),
 .
