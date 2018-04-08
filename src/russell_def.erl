@@ -16,7 +16,7 @@ parse(String) ->
     russell_def_parser:parse(Tokens).
 
 format_stmts(Stmts) ->
-    string:join([["  ", format_stmt(S)] || S <- Stmts], "~n").
+    string:join([["  ", format_stmt(S)] || S <- Stmts], "\n").
 
 format_stmt({Name, Tokens}) ->
     io_lib:format("(~s) ~s", [Name, format_tokens(Tokens)]).

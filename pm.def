@@ -1,0 +1,65 @@
+1.01
+  prop P,
+  prop Q,
+: prop (P -> Q),
+  (P -> Q) = ((~ P) or Q),
+.
+
+=->
+  P = Q,
+  |- (Q -> R),
+: |- (P -> R),
+.
+
+1.1
+  |- P,
+  |- (P -> Q),
+: |- Q,
+.
+
+taut
+  prop P,
+: |- ((P or P) -> P),
+.
+
+add
+  prop P,
+  prop Q,
+: |- (Q -> (P or Q)),
+.
+
+perm
+  prop P,
+  prop Q,
+: |- ((P or Q) -> (Q or P)),
+.
+
+assoc
+  prop P,
+  prop Q,
+  prop R,
+: |- ((P or (Q or R)) -> (Q or (P or R))),
+.
+
+sum
+  prop P,
+  prop Q,
+  prop R,
+: |- ((Q -> R) -> ((P or Q) -> (P or R))),
+.
+
+~
+  prop P,
+: prop (~ P),
+.
+
+or
+  prop P,
+  prop Q,
+: prop (P or Q),
+.
+
+abs
+  prop P,
+: |- ((P -> (~ P)) -> (~ P)),
+.
