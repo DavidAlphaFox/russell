@@ -40,6 +40,17 @@ handle_tokens(Tokens, State, Defs) ->
 
 eval_cmd({{'.quit', _}, _}, _, _) ->
     halt();
+eval_cmd({{'.def', Line}, [{Name, _}]}, State, Def) ->
+    case maps:find(Name, Def) of
+        error ->
+            {error, {Line, russell_def, {def_not_found, Name}}};
+        {ok, {In, Out}} ->
+            io:format(
+              "  ~s: ~s",
+              [string:join([[russell_def:format_tokens(I), ",\n"] || I <- In], "  "),
+               string:join([[russell_def:format_tokens(O), ",\n"] || O <- Out], "  ")]),
+            {ok, State}
+    end;
 eval_cmd({{'.prove', _}, [{Name, _}]}, State, Defs) ->
     case maps:find(Name, Defs) of
         error ->

@@ -1,6 +1,6 @@
 -module(russell_def).
 
--export([file/1, format_stmts/1, format_stmt/1, format_error/1, find/3, match_stmts/3, apply/3]).
+-export([file/1, format_stmts/1, format_stmt/1, format_tokens/1, format_error/1, find/3, match_stmts/3, apply/3]).
 
 file(Filename) ->
     {ok, Bin} = file:read_file(Filename),
