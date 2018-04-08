@@ -43,7 +43,7 @@ format_error({not_match, E, G}) ->
       [format_tokens(E),format_tokens(G)]);
 format_error({not_match, E, G, V, X}) ->
     io_lib:format(
-      "statement mismatch~n  Expected:~n  ~s  Where ~s=~n    ~s~n  Got:~n    ~s",
+      "statement mismatch~n  Expected:~n     ~s~n  Where ~s =~n    ~s~n  Got:~n    ~s",
       [format_tokens(E),V,format_token(X),format_tokens(G)]).
 
 
