@@ -1,6 +1,6 @@
 -module(russell_pf).
 
--export([file/1, format_error/1, verify/2]).
+-export([file/1, format_error/1, validate_uses/2, verify/2, verify_step/5]).
 
 file(Filename) ->
     {ok, Bin} = file:read_file(Filename),
@@ -8,7 +8,7 @@ file(Filename) ->
         {ok, Proof} ->
             case validate(Proof) of
                 ok ->
-                    {ok, transform(Proof)};
+                    {ok, Proof};
                 Error ->
                     Error
             end;
@@ -24,7 +24,9 @@ parse(String) ->
 format_error({stmt_defined, S}) ->
     io_lib:format("statement ~w already defined.", [S]);
 format_error({stmt_not_found, S}) ->
-    io_lib:format("statement ~w not found.", [S]).
+    io_lib:format("statement ~w not found.", [S]);
+format_error({output_number_mismatch, E, G}) ->
+    io_lib:format("output number mismatch, expected ~B, got ~B", [E,G]).
 
 validate({{_, In, Out}, Body}) ->
     case validate_defs(In, sets:new()) of
@@ -79,34 +81,27 @@ validate_uses([{S, Line}|T], Def) ->
             validate_uses(T, Def)
     end.
 
-transform({Head, Body}) ->
-    {transform_stmt(Head),
-     [transform_stmt(S) || S <- Body]}.
 
-transform_stmt({Name, Ins, Outs}) ->
-    {Name, transform_symbols(Ins), transform_symbols(Outs)}.
-
-transform_symbols(Symbols) ->
-    [S || {S, _} <- Symbols].
-
-
-verify(Defs, {{Name, InNames, OutNames}, Steps}) ->
-    case russell_def:find(Name, length(InNames), length(OutNames), Defs) of
+verify(Defs, {{Name={_,Line}, InNames, OutNames}, Steps}) ->
+    case russell_def:find(Name, length(InNames), Defs) of
         {error, _} = Error ->
             Error;
+        {ok, {_, OutStmts}} when length(OutStmts) =/= length(OutNames) ->
+            {error, {Line, ?MODULE, {output_number_mismatch, length(OutStmts), length(OutNames)}}};
         {ok, {InStmts, OutStmts}} ->
             Ins = lists:zip(InNames, InStmts),
-            case verify_steps(Steps, maps:from_list(Ins), 0, Defs) of
+            InStmts1 = [{N,S} || {{N,_},S} <- Ins],
+            case verify_steps(Steps, maps:from_list(InStmts1), 0, Defs) of
                 {error, Error, Log} ->
-                    {error, Error, Ins, Log};
+                    {error, Error, InStmts1, Log};
                 {ok, Stmts, _, Log} ->
-                    OutStmts1 = [ maps:get(N,Stmts) || N <- OutNames],
+                    Outs = [ {{N,L},maps:get(N,Stmts)} || {N,L} <- OutNames],
 
-                    case russell_def:match(InStmts ++ OutStmts, InStmts ++ OutStmts1, #{}) of
+                    case russell_def:match_stmts(Ins ++ Outs, InStmts ++ OutStmts, #{}) of
                         {error, Error} ->
-                            {error, Error, Ins, Log};
+                            {error, Error, InStmts1, Log};
                         _ ->
-                            {ok, Ins, Log}
+                            {ok, InStmts1, Log}
                     end
             end
     end.
@@ -117,32 +112,41 @@ verify_steps([], Stmts, Counter, _) ->
 verify_steps([{Name, In, _} = H|T], Stmts, Counter, Defs) ->
     case verify_step(H, Stmts, Counter, Defs) of
         {error, Error} ->
-            {error, {{Name, In}, Error}, []};
-        {ok, Stmts1, Counter1, Step} ->
+            {error, Error, []};
+        {ok, Stmts1, Counter1, Outs} ->
+            Step = {{Name, In}, Outs},
             case verify_steps(T, Stmts1, Counter1, Defs) of
                 {error, Error, Steps} ->
-                    {error, Error, [{{Name, In}, Step}|Steps]};
+                    {error, Error, [Step|Steps]};
                 {ok, Stmts2, Counter2, Steps} ->
-                    {ok, Stmts2, Counter2, [{{Name, In}, Step}|Steps]}
+                    {ok, Stmts2, Counter2, [Step|Steps]}
             end
     end.
 
 
-verify_step({Name, InNames, OutNames}, Stmts, Counter, Defs) ->
-    case russell_def:find(Name, length(InNames), length(OutNames), Defs) of
+verify_step({Name={_,Line}, InNames, OutNames}, Stmts, Counter, Defs) ->
+    case verify_step(Name, InNames, Stmts, Counter, Defs) of
+        {error, _} = Error ->
+            Error;
+        {ok, OutStmts, _} when length(OutStmts) =/= length(OutNames) ->
+            {error, {Line, ?MODULE, {output_number_mismatch, length(OutStmts), length(OutNames)}}};
+        {ok, OutStmts, Counter1} ->
+            Outs =
+                [ {N,V}
+                  || {{N,_},V} <- lists:zip(OutNames, OutStmts),
+                     N =/= '_' ],
+            Stmts1 = maps:merge(Stmts, maps:from_list(Outs)),
+            {ok, Stmts1, Counter1, Outs}
+    end.
+
+
+verify_step(Name, InNames, Stmts, Counter, Defs) ->
+    case russell_def:find(Name, length(InNames), Defs) of
         {error, _} = Error ->
             Error;
         {ok, Def} ->
-            InStmts = [ maps:get(N,Stmts) || N <- InNames],
-            case russell_def:apply(InStmts, Def, Counter) of
-                {error, _} = Error ->
-                    Error;
-                {ok, OutStmts, Counter1} ->
-                    Outs =
-                        [ {N,V}
-                          || {N,V} <- lists:zip(OutNames, OutStmts),
-                             N =/= '_' ],
-                    Stmts1 = maps:merge(Stmts, maps:from_list(Outs)),
-                    {ok, Stmts1, Counter1, Outs}
-            end
+            InStmts =
+                [ {{N,L}, maps:get(N,Stmts)}
+                  || {N,L} <- InNames],
+            russell_def:apply(InStmts, Def, Counter)
     end.

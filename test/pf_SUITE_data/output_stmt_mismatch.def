@@ -6,6 +6,5 @@ p
 q
   p X,
   p X,
-: q X,
-  r X,
+: p X,
 .

@@ -1,18 +1,18 @@
-Nonterminals pf stmts stmt symbols symbol.
-Terminals atom var ignore ':' ','.
-Rootsymbol pf.
+Nonterminals line command stmt symbols symbol.
+Terminals atom var ignore cmd.
+Rootsymbol line.
 
-pf -> stmt ':' stmts:
-  {'$1', '$3'}.
+line -> stmt:
+  {step, '$1'}.
 
-stmts -> stmts stmt ',':
-  '$1' ++ ['$2'].
+line -> command:
+  {cmd, '$1'}.
 
-stmts -> '$empty':
-  [].
+stmt -> atom symbols:
+  {mk_symbol('$1'), '$2'}.
 
-stmt -> symbols ':' atom symbols:
-  {mk_symbol('$3'), '$4', '$1'}.
+command -> cmd symbols:
+  {mk_symbol('$1'), '$2'}.
 
 symbols -> symbols symbol:
   '$1' ++ ['$2'].
@@ -37,4 +37,6 @@ mk_symbol({atom, Line, A}) ->
 mk_symbol({var, Line, V}) ->
     {V, Line};
 mk_symbol({ignore, Line}) ->
-    {'_', Line}.
+    {'_', Line};
+mk_symbol({cmd, Line, C}) ->
+    {C, Line}.
