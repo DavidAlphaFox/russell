@@ -2,10 +2,6 @@
 
 -export([server/1, format_error/1]).
 
-parse(String) ->
-    {ok, Tokens, _} = russell_lexer:string(String),
-    russell_shell_parser:parse(Tokens).
-
 format_error({unknown_command, Name}) ->
     io_lib:format("unknown command ~s", [Name]);
 format_error(step_not_allowed) ->
@@ -15,26 +11,32 @@ server(Defs) ->
     server_loop(none, Defs).
 
 server_loop(State, Defs) ->
-    Line = io:get_line(">>> "),
+    case io:get_line(">>> ") of
+        eof ->
+            io:format("~n", []);
+        Line ->
+            {ok, Tokens, _} = russell_lexer:string(Line),
+            case handle_tokens(Tokens, State, Defs) of
+                {error, {_,M,E}} ->
+                    io:format("ERROR: ~s~n", [M:format_error(E)]),
+                    State1 = State;
+                {ok, State1} ->
+                    ok
+            end,
+            server_loop(State1, Defs)
+    end.
 
-    case
-        case parse(Line) of
-            {error, _} = Error ->
-                Error;
-            {ok, {cmd, Cmd}} ->
-                eval_cmd(Cmd, State, Defs);
-            {ok, {step, Step}} ->
-                eval_step(Step, State, Defs)
-        end
-    of
-        {error, {_,M,E}} ->
-            io:format("ERROR: ~s~n", [M:format_error(E)]),
-            State1 = State;
-        {ok, State1} ->
-            ok
-    end,
-    server_loop(State1, Defs).
-
+handle_tokens([], State, _) ->
+    {ok, State};
+handle_tokens(Tokens, State, Defs) ->
+    case russell_shell_parser:parse(Tokens) of
+        {error, _} = Error ->
+            Error;
+        {ok, {cmd, Cmd}} ->
+            eval_cmd(Cmd, State, Defs);
+        {ok, {step, Step}} ->
+            eval_step(Step, State, Defs)
+    end.
 
 eval_cmd({{'.quit', _}, _}, _, _) ->
     halt();
@@ -72,7 +74,12 @@ eval_cmd({{'.qed', _}, Outs}, {prove, State = #{input := Ins, stmts := Stmts, go
     end;
 eval_cmd({{'.save',_}, [{Filename,_}]}, State = {done, #{name := Name, steps := Steps, input := Ins, output := Outs}}, _) ->
     Bin = russell_pf:format({{{Name, 1}, Ins, Outs}, Steps}),
-    ok = file:write_file(Filename, Bin),
+    case file:write_file(Filename, Bin) of
+        ok ->
+            ok;
+        _ ->
+            io:format("ERROR: failed to write file ~s~n", [Filename])
+    end,
     {ok, State};
 eval_cmd({{'.dump', _}, []}, State, _) ->
     show_all(State),
