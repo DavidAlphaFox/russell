@@ -10,5 +10,7 @@ otp_release:
   - 19.0
 script:
   - rebar3 ct
+  - rebar3 compile
+  - make
 after_success:
 - rebar3 as test coveralls send

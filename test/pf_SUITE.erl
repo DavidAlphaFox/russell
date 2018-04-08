@@ -26,13 +26,13 @@ all() ->
 parse_def(C, F) ->
     DFN = filename:join(?config(data_dir, C), F),
     PFN = filename:join(?config(data_dir, C), "parse_error.pf"),
-    russell:main([DFN, PFN]),
+    russell:run([DFN, PFN]),
     russell_def:file(DFN).
 
 parse_pf(C, F) ->
     DFN = filename:join(?config(data_dir, C), "demo0.def"),
     PFN = filename:join(?config(data_dir, C), F),
-    russell:main([DFN, PFN]),
+    russell:run([DFN, PFN]),
     russell_pf:file(PFN).
 
 verify(C, D, P) ->
@@ -41,7 +41,7 @@ verify(C, D, P) ->
 
     {ok, Def} = russell_def:file(DFN),
     {ok, Pf} = russell_pf:file(PFN),
-    russell:main([DFN,PFN]),
+    russell:run([DFN,PFN]),
     russell_pf:verify(Def, Pf).
 
 def_parse_error(C) ->
