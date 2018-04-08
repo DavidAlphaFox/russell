@@ -6,6 +6,7 @@
 all() ->
     [def_parse_error,
      pf_parse_error,
+     pf_format,
      validate_head_stmt_defined,
      validate_head_stmt_not_found,
      validate_body_stmt_defined,
@@ -123,4 +124,11 @@ unbound(C) ->
 
 demo0(C) ->
     {ok, _, _} = verify(C, "demo0.def", "demo0.pf"),
+    ok.
+
+pf_format(C) ->
+    PFN = filename:join(?config(data_dir, C), "demo0.pf"),
+    {ok, P} = russell_pf:file(PFN),
+    {ok, Bin} = file:read_file(PFN),
+    Bin = iolist_to_binary(russell_pf:format(P)),
     ok.

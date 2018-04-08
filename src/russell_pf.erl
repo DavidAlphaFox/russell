@@ -1,6 +1,6 @@
 -module(russell_pf).
 
--export([file/1, format_error/1, validate_uses/2, verify/2, verify_step/5]).
+-export([file/1, format/1, format_error/1, validate_uses/2, verify/2, verify_output/4, verify_step/5]).
 
 file(Filename) ->
     {ok, Bin} = file:read_file(Filename),
@@ -20,6 +20,19 @@ parse(String) ->
     {ok, Tokens, _} = russell_lexer:string(String),
     russell_pf_parser:parse(Tokens).
 
+
+format({Head, Body}) ->
+    [format_stmt(Head),
+     "\n: ",
+     string:join([[format_stmt(S), ",\n"] || S <- Body], "  ")].
+
+format_stmt({{Name,_}, Ins, Outs}) ->
+    io_lib:format(
+      "~s : ~s ~s",
+      [format_names(Outs), Name, format_names(Ins)]).
+
+format_names(Names) ->
+    string:join([io_lib:format("~s", [Name]) || {Name,_} <- Names], " ").
 
 format_error({stmt_defined, S}) ->
     io_lib:format("statement ~w already defined.", [S]);
@@ -89,15 +102,12 @@ verify(Defs, {{Name={_,Line}, InNames, OutNames}, Steps}) ->
         {ok, {_, OutStmts}} when length(OutStmts) =/= length(OutNames) ->
             {error, {Line, ?MODULE, {output_number_mismatch, length(OutStmts), length(OutNames)}}};
         {ok, {InStmts, OutStmts}} ->
-            Ins = lists:zip(InNames, InStmts),
-            InStmts1 = [{N,S} || {{N,_},S} <- Ins],
+            InStmts1 = lists:zip([N || {N,_} <- InNames], InStmts),
             case verify_steps(Steps, maps:from_list(InStmts1), 0, Defs) of
                 {error, Error, Log} ->
                     {error, Error, InStmts1, Log};
                 {ok, Stmts, _, Log} ->
-                    Outs = [ {{N,L},maps:get(N,Stmts)} || {N,L} <- OutNames],
-
-                    case russell_def:match_stmts(Ins ++ Outs, InStmts ++ OutStmts, #{}) of
+                    case verify_output(InNames, OutNames, OutStmts, Stmts) of
                         {error, Error} ->
                             {error, Error, InStmts1, Log};
                         _ ->
@@ -106,6 +116,11 @@ verify(Defs, {{Name={_,Line}, InNames, OutNames}, Steps}) ->
             end
     end.
 
+verify_output(InNames, OutNames, OutStmts, Stmts) ->
+    Ins = [{{N,L}, maps:get(N, Stmts)} || {N,L} <- InNames],
+    InStmts = [I || {_,I} <- Ins],
+    Outs = [{{N,L}, maps:get(N, Stmts)} || {N,L} <- OutNames],
+    russell_def:match_stmts(Ins ++ Outs, InStmts ++ OutStmts, #{}).
 
 verify_steps([], Stmts, Counter, _) ->
     {ok, Stmts, Counter, []};

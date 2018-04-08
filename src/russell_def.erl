@@ -39,11 +39,11 @@ format_error({input_number_mismatch, E, G}) ->
     io_lib:format("input number mismatch, expected ~B, got ~B", [E,G]);
 format_error({not_match, E, G}) ->
     io_lib:format(
-      "statement mismatch~nExpect:~n  ~s~nGot: ~s",
+      "statement mismatch~n  Expected:~n    ~s~n  Got:~n    ~s",
       [format_tokens(E),format_tokens(G)]);
 format_error({not_match, E, G, V, X}) ->
     io_lib:format(
-      "statement mismatch~nExpect:~n  ~sWhere ~s=~n  ~s~nGot: ~s",
+      "statement mismatch~n  Expected:~n  ~s  Where ~s=~n    ~s~n  Got:~n    ~s",
       [format_tokens(E),V,format_token(X),format_tokens(G)]).
 
 

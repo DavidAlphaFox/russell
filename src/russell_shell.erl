@@ -52,16 +52,39 @@ eval_cmd({{'.prove', _}, [{Name, _}]}, State, Defs) ->
                   stmts => #{},
                   goal => Out},
             {In1, State2} = add_stmts(In, State1),
-            {ok, State2#{input => In1}}
+            {ok, {prove, State2#{input => [{I,1} || I <- In1]}}}
     end;
-eval_cmd({{'.dump', _}, []}, State = #{steps := Steps, stmts := Stmts, input := Inputs}, _) ->
-    io:format(
-      "~s~n~s~n",
-      [russell_def:format_stmts([{I, maps:get(I, Stmts)} || I <- Inputs]),
-       russell:format_steps([{{N,I},[{O, maps:get(O,Stmts)} || {O,_} <- Out]} || {N,I,Out} <- Steps])]),
+eval_cmd({{'.qed', Line}, Outs}, {prove, #{goal := Goal}}, _) when length(Goal) =/= length(Outs) ->
+    {error, {Line, russell_pf, {output_number_mismatch, length(Goal), length(Outs)}}};
+eval_cmd({{'.qed', _}, Outs}, {prove, State = #{input := Ins, stmts := Stmts, goal := Goal}}, _) ->
+    Defined = sets:from_list(maps:keys(Stmts)),
+    case russell_pf:validate_uses(Ins, Defined) of
+        {error, _} = Error ->
+            Error;
+        {ok, _} ->
+            case russell_pf:verify_output(Ins, Outs, Goal, Stmts) of
+                {error, _} = Error ->
+                    Error;
+                _ ->
+                    show_all({prove, State}),
+                    {ok, {done, State#{output => Outs}}}
+            end
+    end;
+eval_cmd({{'.save',_}, [{Filename,_}]}, State = {done, #{name := Name, steps := Steps, input := Ins, output := Outs}}, _) ->
+    Bin = russell_pf:format({{{Name, 1}, Ins, Outs}, Steps}),
+    ok = file:write_file(Filename, Bin),
+    {ok, State};
+eval_cmd({{'.dump', _}, []}, State, _) ->
+    show_all(State),
     {ok, State};
 eval_cmd({{Name, Line}, _}, _, _) ->
     {error, {Line, ?MODULE, {unknown_command, Name}}}.
+
+show_all({_, #{steps := Steps, stmts := Stmts, input := Inputs}}) ->
+    io:format(
+      "~s~n~s~n",
+      [russell_def:format_stmts([{I, maps:get(I, Stmts)} || {I,_} <- Inputs]),
+       russell:format_steps([{{N,I},[{O, maps:get(O,Stmts)} || {O,_} <- Out]} || {N,I,Out} <- Steps])]).
 
 add_stmts(Stmts, State) ->
     lists:mapfoldl(fun add_stmt/2, State, Stmts).
@@ -71,7 +94,7 @@ add_stmt(Stmt, State = #{next := Next, stmts := Stmts}) ->
     io:format("~s~n", [russell_def:format_stmt({Name, Stmt})]),
     {Name, State#{next => Next + 1, stmts => Stmts#{Name => Stmt}}}.
 
-eval_step({Name, Ins}, State = #{stmts := Stmts, counter := Counter}, Defs) ->
+eval_step({Name, Ins}, {prove, State = #{stmts := Stmts, counter := Counter}}, Defs) ->
     Defined = sets:from_list(maps:keys(Stmts)),
 
     case russell_pf:validate_uses(Ins, Defined) of
@@ -84,7 +107,7 @@ eval_step({Name, Ins}, State = #{stmts := Stmts, counter := Counter}, Defs) ->
                 {ok, OutStmts, Counter1} ->
                     {Outs, State1 = #{steps := Steps}} = add_stmts(OutStmts, State#{counter => Counter1}),
                     Step = {Name,Ins,[{O,1} || O <- Outs]},
-                    {ok, State1#{steps := Steps ++ [Step]}}
+                    {ok, {prove, State1#{steps := Steps ++ [Step]}}}
             end
     end;
 eval_step({{_, Line}, _}, _, _) ->
