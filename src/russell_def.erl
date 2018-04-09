@@ -18,7 +18,7 @@ parse(String) ->
 format_stmts(Stmts) ->
     string:join([["  ", format_stmt(S)] || S <- Stmts], "\n").
 
-format_stmt({Name, Tokens}) ->
+format_stmt({{Name, _}, Tokens}) ->
     io_lib:format("(~s) ~s", [Name, format_tokens(Tokens)]).
 
 format_tokens(Tokens) ->
@@ -63,8 +63,8 @@ apply(InStmts, {In, Out}, C) ->
         {error, _} = Error ->
             Error;
         {ok, Vars} ->
-            {Stmts, _, C1} = subst(Out, Vars, C),
-            {ok, Stmts, C1}
+            {Stmt, _, C1} = subst(Out, Vars, C),
+            {ok, Stmt, C1}
     end.
 
 match_stmts([], [], Vars) ->

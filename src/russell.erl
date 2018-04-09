@@ -1,6 +1,6 @@
 -module(russell).
 
--export([main/1, run/1, format_steps/1]).
+-export([main/1, run/1]).
 
 main(Args) ->
     case run(Args) of
@@ -46,19 +46,12 @@ verify(Defs, Proof) ->
             io:format(
               "~s~n~s~n",
               [russell_def:format_stmts(Ins),
-               format_steps(Steps)]),
+               russell_pf:format_steps(Steps)]),
             {error, Error};
         {ok, Ins, Steps} ->
             io:format(
               "~s~n~s~n",
               [russell_def:format_stmts(Ins),
-               format_steps(Steps)]),
+               russell_pf:format_steps(Steps)]),
             ok
     end.
-
-format_steps(Steps) ->
-    string:join([format_step(S) || S <- Steps], "\n").
-
-format_step({{{Name,_}, Ins}, Stmts}) ->
-    [io_lib:format("~s ~s:~n", [Name, string:join([atom_to_list(A) || {A,_} <- Ins], " ")]),
-     russell_def:format_stmts(Stmts)].

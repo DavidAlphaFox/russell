@@ -46,9 +46,9 @@ eval_cmd({{'.def', Line}, [{Name, _}]}, State, Def) ->
             {error, {Line, russell_def, {def_not_found, Name}}};
         {ok, {In, Out}} ->
             io:format(
-              "  ~s: ~s",
-              [string:join([[russell_def:format_tokens(I), ",\n"] || I <- In], "  "),
-               string:join([[russell_def:format_tokens(O), ",\n"] || O <- Out], "  ")]),
+              "~s: ~s.~n",
+              [[["  ",russell_def:format_tokens(I), ",\n"] || I <- In],
+               russell_def:format_tokens(Out)]),
             {ok, State}
     end;
 eval_cmd({{'.prove', _}, [{Name, _}]}, State, Defs) ->
@@ -65,26 +65,19 @@ eval_cmd({{'.prove', _}, [{Name, _}]}, State, Defs) ->
                   stmts => #{},
                   goal => Out},
             {In1, State2} = add_stmts(In, State1),
-            {ok, {prove, State2#{input => [{I,1} || I <- In1]}}}
+            {ok, {prove, State2#{input => lists:zip([{I,1} || I <- In1], In)}}}
     end;
-eval_cmd({{'.qed', Line}, Outs}, {prove, #{goal := Goal}}, _) when length(Goal) =/= length(Outs) ->
-    {error, {Line, russell_pf, {output_number_mismatch, length(Goal), length(Outs)}}};
-eval_cmd({{'.qed', _}, Outs}, {prove, State = #{input := Ins, stmts := Stmts, goal := Goal}}, _) ->
-    Defined = sets:from_list(maps:keys(Stmts)),
-    case russell_pf:validate_uses(Ins, Defined) of
+eval_cmd({{'.qed', _}, []}, {prove, State = #{input := Ins, steps := Steps, goal := Goal}}, _) ->
+    {_, Out} = lists:last(Steps),
+    case russell_pf:verify_output(Ins, Out, Goal) of
         {error, _} = Error ->
             Error;
-        {ok, _} ->
-            case russell_pf:verify_output(Ins, Outs, Goal, Stmts) of
-                {error, _} = Error ->
-                    Error;
-                _ ->
-                    show_all({prove, State}),
-                    {ok, {done, State#{output => Outs}}}
-            end
+        _ ->
+            show_all({prove, State}),
+            {ok, {done, State}}
     end;
-eval_cmd({{'.save',_}, [{Filename,_}]}, State = {done, #{name := Name, steps := Steps, input := Ins, output := Outs}}, _) ->
-    Bin = russell_pf:format({{{Name, 1}, Ins, Outs}, Steps}),
+eval_cmd({{'.save',_}, [{Filename,_}]}, State = {done, #{name := Name, steps := Steps, input := Ins}}, _) ->
+    Bin = russell_pf:format({{Name, 1}, [I || {I,_} <-Ins], [{N,I,O} || {{N,I},{O,_}} <- Steps]}),
     case file:write_file(Filename, Bin) of
         ok ->
             ok;
@@ -98,18 +91,18 @@ eval_cmd({{'.dump', _}, []}, State, _) ->
 eval_cmd({{Name, Line}, _}, _, _) ->
     {error, {Line, ?MODULE, {unknown_command, Name}}}.
 
-show_all({_, #{steps := Steps, stmts := Stmts, input := Inputs}}) ->
+show_all({_, #{steps := Steps, input := Inputs}}) ->
     io:format(
       "~s~n~s~n",
-      [russell_def:format_stmts([{I, maps:get(I, Stmts)} || {I,_} <- Inputs]),
-       russell:format_steps([{{N,I},[{O, maps:get(O,Stmts)} || {O,_} <- Out]} || {N,I,Out} <- Steps])]).
+      [russell_def:format_stmts(Inputs),
+       russell_pf:format_steps(Steps)]).
 
 add_stmts(Stmts, State) ->
     lists:mapfoldl(fun add_stmt/2, State, Stmts).
 
 add_stmt(Stmt, State = #{next := Next, stmts := Stmts}) ->
     Name = list_to_atom(integer_to_list(Next)),
-    io:format("~s~n", [russell_def:format_stmt({Name, Stmt})]),
+    io:format("~s~n", [russell_def:format_stmt({{Name, 1}, Stmt})]),
     {Name, State#{next => Next + 1, stmts => Stmts#{Name => Stmt}}}.
 
 eval_step({Name, Ins}, {prove, State = #{stmts := Stmts, counter := Counter}}, Defs) ->
@@ -122,9 +115,9 @@ eval_step({Name, Ins}, {prove, State = #{stmts := Stmts, counter := Counter}}, D
             case russell_pf:verify_step(Name, Ins, Stmts, Counter, Defs) of
                 {error, _} = Error ->
                     Error;
-                {ok, OutStmts, Counter1} ->
-                    {Outs, State1 = #{steps := Steps}} = add_stmts(OutStmts, State#{counter => Counter1}),
-                    Step = {Name,Ins,[{O,1} || O <- Outs]},
+                {ok, OutStmt, Counter1} ->
+                    {Out, State1 = #{steps := Steps}} = add_stmt(OutStmt, State#{counter => Counter1}),
+                    Step = {{Name,Ins},{{Out,1},OutStmt}},
                     {ok, {prove, State1#{steps := Steps ++ [Step]}}}
             end
     end;

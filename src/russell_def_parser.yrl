@@ -8,16 +8,16 @@ defs -> defs def:
 defs -> '$empty':
   [].
 
-def -> atom stmts ':' stmts '.':
+def -> atom stmts ':' stmt '.':
   {mk_token('$1'), {'$2', '$4'}}.
 
-stmts -> stmts stmt:
+stmts -> stmts stmt ',':
   '$1' ++ ['$2'].
 
 stmts -> '$empty':
   [].
 
-stmt -> tokens ',':
+stmt -> tokens:
   '$1'.
 
 tokens -> tokens token:

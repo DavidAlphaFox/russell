@@ -1,9 +1,7 @@
 p
   p X,
-: q X,
-.
+: q X.
 
 q
   p X,
-: q X,
-.
+: q X.

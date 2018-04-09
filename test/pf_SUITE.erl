@@ -8,15 +8,12 @@ all() ->
      pf_parse_error,
      pf_format,
      validate_head_stmt_defined,
-     validate_head_stmt_not_found,
      validate_body_stmt_defined,
      validate_body_stmt_not_found,
      pf_head_def_not_found,
      pf_body_def_not_found,
      pf_head_input_mismatch,
-     pf_head_output_mismatch,
      pf_body_input_mismatch,
-     pf_body_output_mismatch,
      pf_output_stmt_mismatch,
      stmt_symbol_mismatch,
      stmt_var_mismatch,
@@ -59,18 +56,13 @@ validate_head_stmt_defined(C) ->
         parse_pf(C, "head_stmt_defined.pf"),
     ok.
 
-validate_head_stmt_not_found(C) ->
-    {error, {1, russell_pf, {stmt_not_found, a}}} =
-        parse_pf(C, "head_stmt_not_found.pf"),
-    ok.
-
 validate_body_stmt_defined(C) ->
     {error, {2, russell_pf, {stmt_defined, a}}} =
         parse_pf(C, "body_stmt_defined.pf"),
     ok.
 
 validate_body_stmt_not_found(C) ->
-    {error, {2, russell_pf, {stmt_not_found, b}}} =
+    {error, {2, russell_pf, {stmt_not_found, a}}} =
         parse_pf(C, "body_stmt_not_found.pf"),
     ok.
 
@@ -104,7 +96,7 @@ pf_body_output_mismatch(C) ->
     ok.
 
 pf_output_stmt_mismatch(C) ->
-    {error,{1, russell_def, {not_match,_,_}}, _, _} =
+    {error,{2, russell_def, {not_match,_,_}}, _, _} =
         verify(C, "output_stmt_mismatch.def", "def_not_found.pf"),
     ok.
 

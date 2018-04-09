@@ -1,32 +1,26 @@
 tze
-: term 0,
-.
+: term 0.
 
 tpl
   term T,
   term R,
-: term (T + R),
-.
+: term (T + R).
 
 a1
   term T,
   term R,
   term S,
-: |- ((T = R) -> ((T = S) -> (R = S))),
-.
+: |- ((T = R) -> ((T = S) -> (R = S))).
 
 a2
   term T,
-: |- ((T + 0) = T),
-.
+: |- ((T + 0) = T).
 
 mp
   |- P,
   |- (P -> Q),
-: |- Q,
-.
+: |- Q.
 
 th1
   term T,
-: |- (T = T),
-.
+: |- (T = T).

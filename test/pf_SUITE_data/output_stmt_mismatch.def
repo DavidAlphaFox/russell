@@ -1,10 +1,8 @@
 p
   p X,
-: q X,
-.
+: q X.
 
 q
   p X,
   p X,
-: p X,
-.
+: p X.
