@@ -99,7 +99,7 @@ or
   prop P,
 : |- ((P -> (~ P)) -> (~ P)).
 
-simp
+2.02
   prop P,
   prop Q,
 : |- (Q -> (P -> Q)).
@@ -131,7 +131,7 @@ comm
   prop P,
 : |- (P -> (P or P)).
 
-id
+2.08
   prop P,
 : |- (P -> P).
 
