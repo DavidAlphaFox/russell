@@ -23,6 +23,9 @@ step -> atom substs:
 step -> atom:
   {subst, mk_symbol('$1'), []}.
 
+step -> step ':' atom stmts:
+  {apply, mk_symbol('$3'), ['$1'|'$4']}.
+
 stmts -> stmts stmt:
   '$1' ++ ['$2'].
 
