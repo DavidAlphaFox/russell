@@ -45,11 +45,6 @@ resolve(DFN, SFN) ->
     {InStmts1, Vars, NextVar} = russell_def:subst(InStmts, #{}, 0),
     {OutStmt1, _, NextVar1} = russell_def:subst(OutStmt, Vars, NextVar),
 
-    VarsSubst =
-        maps:from_list(
-          [ {V,{var,K}}
-            || {K,{var,V}} <- maps:to_list(Vars)]),
-
     State =
         #{ next_var => NextVar1,
            vars => Vars,
@@ -63,7 +58,7 @@ resolve(DFN, SFN) ->
 
     {ok, Names} = russell:file_error(SFN, bind_names(lists:zip(Ins, InStmts3), #{})),
 
-    {ok, #{steps := Steps1, subst := Subst, stmts := Stmts, next_stmt := Next}} =
+    {ok, #{steps := Steps1, subst := Subst, stmts := Stmts, next_stmt := Next, names := Names1}} =
         russell:file_error(SFN, resolve_steps(Steps, State1#{names => Names}, Defs)),
 
     Out = maps:get(Next-1, Stmts),
@@ -71,14 +66,31 @@ resolve(DFN, SFN) ->
         false ->
             {error, {Line, ?MODULE, {output_mismatch, OutStmt, russell_unify:subst(Out, Subst)}}};
         Subst1 ->
-            Subst2 = maps:merge(Subst1, VarsSubst),
+            Subst2 =
+                lists:foldl(
+                  fun ({K, V}, S) ->
+                          {var, V1} = russell_unify:subst(V, S),
+                          S#{V1 => {var, K}}
+                  end,
+                  Subst1,
+                  maps:to_list(Vars)),
+
+            Stmts1 = maps:map(fun(_, V) -> russell_unify:subst(V, Subst2) end, Stmts),
+
+            lists:foreach(
+              fun({N,V}) ->
+                      io:format(
+                        "(~s) ~s~n",
+                        [N,russell_def:format_tokens(maps:get(V, Stmts1))])
+              end,
+              maps:to_list(Names1)),
 
             {ok,
              Name,
              #{out => Next-1,
                inputs => InStmts,
                steps => Steps1,
-               stmts => maps:map(fun(_, V) -> russell_unify:subst(V, Subst2) end, Stmts)},
+               stmts => Stmts1},
              Defs}
     end.
 

@@ -1,0 +1,2 @@
+2.31:
+  1 . syll (. syll (2.3) (assoc Q : R R : Q)) (perm P : R Q : (P or Q)).
