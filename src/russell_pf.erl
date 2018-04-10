@@ -105,7 +105,7 @@ validate_uses([{S, Line}|T], Def) ->
 
 
 verify(Defs, {Name, InNames, Steps}) ->
-    case russell_def:find(Name, length(InNames), Defs) of
+    case russell_def:find_exact(Name, length(InNames), Defs) of
         {error, _} = Error ->
             Error;
         {ok, {InStmts, OutStmt}} ->
@@ -145,7 +145,7 @@ verify_steps([{Name, InNames, {OutName, _}=Out}|T], Stmts, Counter, Defs) ->
     end.
 
 verify_step(Name, InNames, Stmts, Counter, Defs) ->
-    case russell_def:find(Name, length(InNames), Defs) of
+    case russell_def:find_exact(Name, length(InNames), Defs) of
         {error, _} = Error ->
             Error;
         {ok, Def} ->

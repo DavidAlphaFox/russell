@@ -1,11 +1,15 @@
--module(russell_shell).
+-module(russell_pf_shell).
 
--export([server/1, format_error/1]).
+-export([run/1, format_error/1]).
 
 format_error({unknown_command, Name}) ->
     io_lib:format("unknown command ~s", [Name]);
 format_error(step_not_allowed) ->
     "proof step not allowed".
+
+run([DFN]) ->
+    {ok, Defs} = russell:file_error(DFN, russell_def:file(DFN)),
+    server(Defs).
 
 server(Defs) ->
     server_loop(none, Defs).
@@ -29,7 +33,7 @@ server_loop(State, Defs) ->
 handle_tokens([], State, _) ->
     {ok, State};
 handle_tokens(Tokens, State, Defs) ->
-    case russell_shell_parser:parse(Tokens) of
+    case russell_pf_shell_parser:parse(Tokens) of
         {error, _} = Error ->
             Error;
         {ok, {cmd, Cmd}} ->
@@ -40,10 +44,10 @@ handle_tokens(Tokens, State, Defs) ->
 
 eval_cmd({{'.quit', _}, _}, _, _) ->
     halt();
-eval_cmd({{'.def', Line}, [{Name, _}]}, State, Def) ->
-    case maps:find(Name, Def) of
-        error ->
-            {error, {Line, russell_def, {def_not_found, Name}}};
+eval_cmd({{'.def', _}, [Name]}, State, Def) ->
+    case russell_def:find(Name, Def) of
+        {error, _} = Error ->
+            Error;
         {ok, {In, Out}} ->
             io:format(
               "~s: ~s.~n",

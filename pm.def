@@ -1,42 +1,46 @@
+0=0
+  prop P,
+: P = P.
+
+=
+  prop P,
+  prop Q,
+  P = Q,
+: Q = P.
+
 1.01
   prop P,
   prop Q,
-: (P -> Q) = ((~ P) or Q).
+  prop R,
+  prop S,
+  P = R,
+  Q = S,
+: (P -> Q) = ((~ R) or S).
 
 ->
   prop P,
   prop Q,
 : prop (P -> Q).
 
-0=0
-  prop P,
-: P = P.
-
-=0=0
-  P = Q,
-  R = Q,
-: P = R.
-
-=
-  P = Q,
-: Q = P.
-
-=00=
-  P = Q,
-  Q = R,
-: P = R.
-
 =->=
+  prop P,
+  prop Q,
+  prop R,
+  prop S,
   P = Q,
   R = S,
 : (P -> R) = (Q -> S).
 
 |-=
+  prop P,
+  prop Q,
   P = Q,
   |- Q,
 : |- P.
 
 1.1
+  prop P,
+  prop Q,
   |- P,
   |- (P -> Q),
 : |- Q.
@@ -72,6 +76,8 @@ sum
 : prop (~ P).
 
 ~=
+  prop P,
+  prop Q,
   P = Q,
 : (~ P) = (~ Q).
 
@@ -81,6 +87,10 @@ or
 : prop (P or Q).
 
 =or=
+  prop P,
+  prop Q,
+  prop R,
+  prop S,
   P = Q,
   R = S,
 : (P or R) = (Q or S).
@@ -149,3 +159,16 @@ id
   prop P,
   prop Q,
 : |- (((~ P) -> Q) -> ((~ Q) -> P)).
+
+syll
+  prop P,
+  prop Q,
+  prop R,
+  |- (P -> Q),
+  |- (Q -> R),
+: |- (P -> R).
+
+2.16
+  prop P,
+  prop Q,
+: |- ((P -> Q) -> ((~ Q) -> (~ P))).

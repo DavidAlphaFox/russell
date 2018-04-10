@@ -1,6 +1,10 @@
 -module(russell_def).
 
--export([file/1, format_stmts/1, format_stmt/1, format_tokens/1, format_error/1, find/3, match_stmts/3, apply/3]).
+-export(
+   [ file/1, format_error/1,
+     format_stmts/1, format_stmt/1, format_tokens/1,
+     find/2, find/3, find_exact/3,
+     match_stmts/3, match/3, apply/3, subst/3 ]).
 
 file(Filename) ->
     {ok, Bin} = file:read_file(Filename),
@@ -47,10 +51,28 @@ format_error({not_match, E, G, V, X}) ->
       [format_tokens(E),V,format_token(X),format_tokens(G)]).
 
 
-find({Name, Line}, NIn, Defs) ->
+find({Name, Line}, Defs) ->
     case maps:find(Name, Defs) of
         error ->
             {error, {Line, ?MODULE, {def_not_found, Name}}};
+        {ok, Def} ->
+            {ok, Def}
+    end.
+
+find({_, Line}=Name, NIn, Defs) ->
+    case find(Name, Defs) of
+        {error, _} = Error ->
+            Error;
+        {ok, {In, _}} when length(In) < NIn ->
+            {error, {Line, ?MODULE, {input_number_mismatch, length(In), NIn}}};
+        {ok, Def} ->
+            {ok, Def}
+    end.
+
+find_exact({_, Line}=Name, NIn, Defs) ->
+    case find(Name, Defs) of
+        {error, _} = Error ->
+            Error;
         {ok, {In, _}} when length(In) =/= NIn ->
             {error, {Line, ?MODULE, {input_number_mismatch, length(In), NIn}}};
         {ok, Def} ->

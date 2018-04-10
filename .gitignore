@@ -3,6 +3,5 @@ bin/
 _build/
 rebar.lock
 src/russell_lexer.erl
-src/russell_def_parser.erl
-src/russell_pf_parser.erl
-src/russell_shell_parser.erl
+src/russell_*_parser.erl
+*.pf
