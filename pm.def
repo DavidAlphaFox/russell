@@ -127,6 +127,15 @@ comm
   prop R,
 : |- ((P -> Q) -> ((Q -> R) -> (P -> R))).
 
+syll
+  prop P,
+  prop Q,
+  prop R,
+  prop S,
+  |- (P -> Q),
+  |- (R -> S),
+: |- ((Q -> R) -> (P -> S)).
+
 2.07
   prop P,
 : |- (P -> (P or P)).
@@ -159,14 +168,6 @@ comm
   prop P,
   prop Q,
 : |- (((~ P) -> Q) -> ((~ Q) -> P)).
-
-syll
-  prop P,
-  prop Q,
-  prop R,
-  |- (P -> Q),
-  |- (Q -> R),
-: |- (P -> R).
 
 2.16
   prop P,
@@ -350,3 +351,8 @@ or2
   prop P,
   prop Q,
 : |- ((~ Q) -> ((P or Q) -> P)).
+
+2.6
+  prop P,
+  prop Q,
+: |- (((~ P) -> Q) -> ((P -> Q) -> Q)).
