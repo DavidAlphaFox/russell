@@ -3,7 +3,7 @@ Definitions.
 Atom       = [^_A-Z():,.\000-\s][^():,.\000-\s]*
 Atom2      = [^_A-Z():,.\000-\s][^():,\000-\s]*[^():,.\000-\s]
 Variable   = [A-Z][^():,.\000-\s]*
-Ignore     = _[^():,\000-\s]*
+Ignore     = _[^():,.\000-\s]*
 Command    = [.][^():,\000-\s]+
 Whitespace = [\000-\s]+
 Reserved   = [():,.]

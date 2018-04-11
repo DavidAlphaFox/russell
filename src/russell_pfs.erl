@@ -27,7 +27,7 @@ format_error({unbound_var_found, N, I}) ->
     io_lib:format("unbound variable found in input ~B of ~s", [I, N]);
 format_error({not_match, N, I, E, G}) ->
     io_lib:format(
-      "statement mismatch in input ~B of ~s  Expected:~n    ~s~n  Got:~n    ~s",
+      "statement mismatch in input ~B of ~s~n  Expected:~n    ~s~n  Got:~n    ~s",
       [I, N, russell_def:format_tokens(E),russell_def:format_tokens(G)]);
 format_error({output_mismatch, E, G}) ->
     io_lib:format(
@@ -47,7 +47,7 @@ resolve(DFN, SFN) ->
 
     Defs1 = maps:to_list(Defs),
 
-    {ok, Proven2} = resolve_unproven(Inputs, Out, Stmts, Proven1, Defs1),
+    {ok, Proven2} = russell:file_error(SFN, resolve_unproven(Inputs, Out, Stmts, Proven1, Defs1)),
     {ok, construct(Name, NIn, Out, Proven2)}.
 
 
