@@ -2,13 +2,13 @@
 
 -export([run/1, format_error/1]).
 
+-import(russell_usearch, [contains_unbound/1]).
+
 run([DFN, SFN]) ->
-    {ok, Name, Resolved, Defs} = russell:file_error(SFN, resolve(DFN, SFN)),
-    {ok, Pf} = russell:file_error(SFN, construct(Name, Resolved, Defs)),
+    {ok, Pf} = russell:file_error(SFN, resolve(DFN, SFN)),
     io:format("~s~n", [russell_pf:format(Pf)]);
 run([DFN, SFN, PFN]) ->
-    {ok, Name, Resolved, Defs} = russell:file_error(SFN, resolve(DFN, SFN)),
-    {ok, Pf} = russell:file_error(SFN, construct(Name, Resolved, Defs)),
+    {ok, Pf} = russell:file_error(SFN, resolve(DFN, SFN)),
     file:write_file(PFN, russell_pf:format(Pf)).
 
 file(Filename) ->
@@ -39,6 +39,19 @@ format_error({not_found, N, I, Stmt}) ->
 
 resolve(DFN, SFN) ->
     {ok, Defs} = russell:file_error(DFN, russell_def:file(DFN)),
+    {ok, Name, Inputs, Out, Stmts, Proven} = russell:file_error(SFN, resolve_steps(Defs, SFN)),
+
+    NIn = length(Inputs),
+    Index = lists:seq(1, NIn),
+    Proven1 = maps:merge(maps:from_list([{I,I} || I <- Index]), Proven),
+
+    Defs1 = maps:to_list(Defs),
+
+    {ok, Proven2} = resolve_unproven(Inputs, Out, Stmts, Proven1, Defs1),
+    {ok, construct(Name, NIn, Out, Proven2)}.
+
+
+resolve_steps(Defs, SFN) ->
     {ok, {{_,Line}=Name, Ins, Steps}} = russell:file_error(SFN, file(SFN)),
     {ok, {InStmts, OutStmt}} = russell:file_error(SFN, russell_def:find(Name, length(Ins), Defs)),
 
@@ -85,13 +98,7 @@ resolve(DFN, SFN) ->
               end,
               maps:to_list(Names1)),
 
-            {ok,
-             Name,
-             #{out => Next-1,
-               inputs => InStmts,
-               steps => Steps1,
-               stmts => Stmts1},
-             Defs}
+            {ok, Name, InStmts, Next-1, Stmts1, Steps1}
     end.
 
 resolve_steps([], State, _) ->
@@ -236,101 +243,117 @@ unify(N, X, Y, State=#{subst := Subst, stmts := Stmts}, {Name, Line}) ->
     end.
 
 
-construct(Name, #{inputs := Inputs, out := Out, steps := Proved, stmts := Stmts}, Defs) ->
-    NIn = length(Inputs),
-    Index = lists:seq(1,NIn),
+resolve_unproven(Inputs, Out, Stmts, Proven, Defs) ->
+    {Unbound, Bound} =
+        lists:partition(
+          fun ({_, V}) ->
+                  contains_unbound(maps:get(V, Stmts))
+          end,
+          find_unproven(Out, Proven)),
+
+    Index = lists:seq(1, length(Inputs)),
 
     State = #{
-      proved => maps:merge(maps:from_list([{I,I} || I <- Index]), Proved),
+      proven => Proven,
       known => maps:from_list(lists:zip(Inputs, Index)),
-      next_stmt => Out + 1,
-      steps => #{},
-      next_step => length(Inputs)+1},
+      next_stmt => Out + 1},
 
-    case construct_stmt(Out, State, {{'_',0}, 0}, Stmts, maps:to_list(Defs)) of
+    case search_bounds(Bound, State, Stmts, Defs) of
         {error, _} = Error ->
             Error;
-        {ok, N, #{steps := Steps}} ->
-            {ok, make_proof(Name, NIn, N, Steps)}
+        {ok, State1} ->
+            Choices =
+                russell_usearch:search(
+                  [maps:get(V, Stmts) || {_,V} <- Unbound],
+                  Defs),
+
+            case search_unbound_choices(Choices, Unbound, State1, Stmts, Defs) of
+                {error, _} = Error ->
+                    Error;
+                {ok, #{proven := Proven1}} ->
+                    {ok, Proven1}
+            end
     end.
 
+find_unproven(N, Proven) ->
+    find_unproven([], N, {{'_',0}, 0}, Proven).
 
-construct_stmt(N, State = #{proved := Proved}, {{Name,Line}, I}, Stmts, Defs) ->
-    case maps:find(N, Proved) of
+find_unproven(Acc, N, Name, Proven) ->
+    case maps:find(N, Proven) of
         error ->
-            Stmt = maps:get(N, Stmts),
-            case validate(Stmt, {Name,Line}, I) of
-                {error, _} = Error ->
-                    Error;
-                ok ->
-                    case russell_search:search(Stmt, State, Defs) of
-                        {not_found, _} ->
-                            {error, {Line, ?MODULE, {not_found, Name, I, Stmt}}};
-                        {ok, N1, State1} ->
-                            construct_stmt(N1, State1, {{Name,Line},I}, Stmts, Defs)
-                    end
-            end;
+            [{Name, N}|Acc];
         {ok, N1} when is_integer(N1) ->
-            {ok, N1, State};
+            Acc;
         {ok, {Name1, Ins}} ->
-            case construct_stmts(1, Ins, State, Name1, Stmts, Defs) of
-                {error, _} = Error ->
-                    Error;
-                {ok, Ins1, State1} ->
-                    {N1, State2 = #{known := Known, proved := Proved1}} = add_step(Name1, Ins1, State1),
-
-                    State3 =
-                        case maps:find(N, Stmts) of
-                            error ->
-                                State2;
-                            {ok, Stmt} ->
-                                State2#{known := Known#{Stmt => N}}
-                        end,
-
-                    {ok, N1, State3#{proved := Proved1#{N := N1}}}
-            end
+            lists:foldl(
+              fun ({I, X}, A) ->
+                      find_unproven(A, X, {Name1, I}, Proven)
+              end,
+              Acc, lists:zip(lists:seq(1, length(Ins)), Ins))
     end.
 
-add_step(Name, Ins, State = #{next_step := Next, steps := Steps}) ->
-    {Next, State#{next_step := Next + 1, steps := Steps#{Next => {Name, Ins}}}}.
+search_bounds([], State, _, _) ->
+    {ok, State};
+search_bounds([{{{Name,Line}, I}, N}|T], State, Stmts, Defs) ->
+    Stmt = maps:get(N, Stmts),
+    case russell_search:search(Stmt, State, Defs) of
+        {not_found, _} ->
+            {error, {Line, ?MODULE, {not_found, Name, I, Stmt}}};
+        {ok, N1, State1=#{proven := Proven}} ->
+            search_bounds(T, State1#{proven := Proven#{N => {sameas, N1}}}, Stmts, Defs)
+    end.
 
+search_unbound_choices(_, [], State, _, _) ->
+    {ok, State};
+search_unbound_choices([], Unbound, _, _, _) ->
+    {error,
+     [ {Line, ?MODULE, {unbound_var_found, Name, I}}
+       || {{{Name,Line},I},_} <- Unbound]};
+search_unbound_choices([H|T], Unbound, State, Stmts, Defs) ->
+    case search_unbounds(Unbound, State, H, Stmts, Defs) of
+        error ->
+            search_unbound_choices(T, Unbound, State, Stmts, Defs);
+        {ok, State1} ->
+            {ok, State1}
+    end.
 
-construct_stmts(_, [], State, _, _, _) ->
-    {ok, [], State};
-construct_stmts(N, [H|T], State, Name, Stmts, Defs) ->
-    case construct_stmt(H, State, {Name, N}, Stmts, Defs) of
-        {error, _} = Error ->
-            Error;
-        {ok, H1, State1} ->
-            case construct_stmts(N+1, T, State1, Name, Stmts, Defs) of
-                {error, _} = Error ->
-                    Error;
-                {ok, T1, State2} ->
-                    {ok, [H1|T1], State2}
-            end
+search_unbounds([], State, _, _, _) ->
+    {ok, State};
+search_unbounds([{_, N}|T], State, Subst, Stmts, Defs) ->
+    Stmt = russell_unify:subst(maps:get(N, Stmts), Subst),
+    case russell_search:search(Stmt, State, Defs) of
+        {not_found, _} ->
+            error;
+        {ok, N1, State1=#{proven := Proven}} ->
+            search_unbounds(T, State1#{proven := Proven#{N => {sameas, N1}}}, Subst, Stmts, Defs)
     end.
 
 
-validate([], _, _) ->
-    ok;
-validate([H|T], Name, I) ->
-    case validate(H, Name, I) of
-        {error, _} = Error ->
-            Error;
-        ok ->
-            validate(T, Name, I)
-    end;
-validate({var, X}, {Name, Line}, I) when is_integer(X) ->
-    {error, {Line, ?MODULE, {unbound_var_found, Name, I}}};
-validate(_, _, _) ->
-    ok.
+construct(Name, NIn, Out, Proven) ->
+    {N, {_, Steps, _}} = construct(Out, {NIn+1, #{}, Proven}),
+    make_proof(Name, NIn, N, Steps).
+
+
+construct(N, {_, _, Proven} = State) ->
+    case maps:get(N, Proven) of
+        N1 when is_integer(N1) ->
+            {N1, State};
+        {sameas, N1} ->
+            construct(N1, State);
+        {Name, Ins} ->
+            {Ins1, {Next, Steps, Proven1}} =
+                lists:mapfoldl(
+                  fun construct/2,
+                  State,
+                  Ins),
+            {Next, {Next+1, Steps#{Next => {Name, Ins1}}, Proven1#{N => Next}}}
+    end.
 
 
 make_proof(Name, NIn, N, Steps) ->
     {Name,
      [make_name(I) || I <- lists:seq(1, NIn)],
-     [make_stmt(I, maps:get(I, Steps)) || I <- lists:seq(NIn+1,N)]
-    }.
+     [make_stmt(I, maps:get(I, Steps)) || I <- lists:seq(NIn+1,N)]}.
 
 make_name(I) ->
     {list_to_atom(integer_to_list(I)), 1}.

@@ -54,5 +54,5 @@ search_stmts([H|T], Stack, State, Defs) ->
             end
     end.
 
-add_stmt(Stmt, Step, State = #{next_stmt := Next, known := Known, proved := Proved}) ->
-    {Next, State#{next_stmt := Next+1, known := Known#{Stmt => Next}, proved := Proved#{Next => Step}}}.
+add_stmt(Stmt, Step, State = #{next_stmt := Next, known := Known, proven := Proven}) ->
+    {Next, State#{next_stmt := Next+1, known := Known#{Stmt => Next}, proven := Proven#{Next => Step}}}.

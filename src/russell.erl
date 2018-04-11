@@ -18,8 +18,18 @@ run(["pf"|Args]) ->
 run(["pfs"|Args]) ->
     russell_pfs:run(Args).
 
-file_error(Filename, {error, {L,M,E}}=Error) ->
-    io:format("~s:~B: ~s~n", [Filename, L, M:format_error(E)]),
+file_error(Filename, {error, [_|_]=Errors} = Error) ->
+    lists:foreach(
+      fun(E) -> print_error(Filename, E) end,
+      Errors),
+    Error;
+file_error(Filename, {error, E}=Error) ->
+    print_error(Filename, E),
     Error;
 file_error(_, Other) ->
     Other.
+
+print_error(Filename, {L,M,E}) ->
+    io:format("~s:~B: ~s~n", [Filename, L, M:format_error(E)]);
+print_error(Filename, E) ->
+    io:format("~s: ERROR ~p~n", [Filename, E]).
