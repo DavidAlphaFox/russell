@@ -39,7 +39,7 @@ verify(C, D, P) ->
     {ok, Def} = russell_def:file(DFN),
     {ok, Pf} = russell_pf:file(PFN),
     catch russell_verify:run([DFN,PFN]),
-    russell_pf:verify(Def, Pf).
+    russell_pf:verify(maps:from_list(Def), Pf).
 
 def_parse_error(C) ->
     {error, {1, russell_def_parser, _}} =

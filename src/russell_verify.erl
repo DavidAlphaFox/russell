@@ -5,7 +5,7 @@
 run([DFN, PFN]) ->
     {ok, Defs} = russell:file_error(DFN, russell_def:file(DFN)),
     {ok, Proof} = russell:file_error(PFN, russell_pf:file(PFN)),
-    russell:file_error(PFN, verify(Defs, Proof)).
+    russell:file_error(PFN, verify(maps:from_list(Defs), Proof)).
 
 verify(Defs, Proof) ->
     case russell_pf:verify(Defs, Proof) of

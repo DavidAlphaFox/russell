@@ -10,7 +10,7 @@ file(Filename) ->
     {ok, Bin} = file:read_file(Filename),
     case parse(binary_to_list(Bin)) of
         {ok, Def} ->
-            {ok, maps:from_list(Def)};
+            {ok, Def};
         Error ->
             Error
     end.

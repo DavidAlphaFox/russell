@@ -356,3 +356,60 @@ or2
   prop P,
   prop Q,
 : |- (((~ P) -> Q) -> ((P -> Q) -> Q)).
+
+2.61
+  prop P,
+  prop Q,
+: |- ((P -> Q) -> (((~ P) -> Q) -> Q)).
+
+2.62
+  prop P,
+  prop Q,
+: |- ((P or Q) -> ((P -> Q) -> Q)).
+
+2.621
+  prop P,
+  prop Q,
+: |- ((P -> Q) -> ((P or Q) -> Q)).
+
+2.63
+  prop P,
+  prop Q,
+: |- ((P or Q) -> (((~ P) or Q) -> Q)).
+
+2.64
+  prop P,
+  prop Q,
+: |- ((P or Q) -> ((P or (~ Q)) -> P)).
+
+2.65
+  prop P,
+  prop Q,
+: |- ((P -> Q) -> ((P -> (~ Q)) -> (~ P))).
+
+2.67
+  prop P,
+  prop Q,
+: |- (((P or Q) -> Q) -> (P -> Q)).
+
+2.68
+  prop P,
+  prop Q,
+: |- (((P -> Q) -> Q) -> (P or Q)).
+
+2.69
+  prop P,
+  prop Q,
+: |- (((P -> Q) -> Q) -> ((Q -> P) -> P)).
+
+2.73
+  prop P,
+  prop Q,
+  prop R,
+: |- ((P -> Q) -> ((P or Q or R) -> (Q or R))).
+
+2.74
+  prop P,
+  prop Q,
+  prop R,
+: |- ((Q -> P) -> ((P or Q or R) -> (P or R))).

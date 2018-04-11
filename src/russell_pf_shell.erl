@@ -9,7 +9,7 @@ format_error(step_not_allowed) ->
 
 run([DFN]) ->
     {ok, Defs} = russell:file_error(DFN, russell_def:file(DFN)),
-    server(Defs).
+    server(maps:from_list(Defs)).
 
 server(Defs) ->
     server_loop(none, Defs).
