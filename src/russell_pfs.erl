@@ -2,7 +2,7 @@
 
 -export([run/1, format_error/1]).
 
--import(russell_usearch, [contains_unbound/1]).
+-import(russell_usearch, [contains_unbound/1, normalize_subst/1]).
 
 run([DFN, SFN]) ->
     {ok, Pf} = russell:file_error(SFN, resolve(DFN, SFN)),
@@ -39,7 +39,7 @@ format_error({not_found, N, I, Stmt}) ->
 
 resolve(DFN, SFN) ->
     {ok, Defs} = russell:file_error(DFN, russell_def:file(DFN)),
-    {ok, Name, Inputs, Out, Stmts, Proven} = russell:file_error(SFN, resolve_steps(Defs, SFN)),
+    {ok, Name, Inputs, Out, Stmts, Proven, NextVar} = russell:file_error(SFN, resolve_steps(Defs, SFN)),
 
     NIn = length(Inputs),
     Index = lists:seq(1, NIn),
@@ -47,7 +47,7 @@ resolve(DFN, SFN) ->
 
     Defs1 = maps:to_list(Defs),
 
-    {ok, Proven2} = russell:file_error(SFN, resolve_unproven(Inputs, Out, Stmts, Proven1, Defs1)),
+    {ok, Proven2} = russell:file_error(SFN, resolve_unproven(Inputs, Out, NextVar, Stmts, Proven1, Defs1)),
     {ok, construct(Name, NIn, Out, Proven2)}.
 
 
@@ -71,7 +71,7 @@ resolve_steps(Defs, SFN) ->
 
     {ok, Names} = russell:file_error(SFN, bind_names(lists:zip(Ins, InStmts3), #{})),
 
-    {ok, #{steps := Steps1, subst := Subst, stmts := Stmts, next_stmt := Next, names := Names1}} =
+    {ok, #{steps := Steps1, subst := Subst, stmts := Stmts, next_stmt := Next, next_var := NextVar2, names := Names1}} =
         russell:file_error(SFN, resolve_steps(Steps, State1#{names => Names}, Defs)),
 
     Out = maps:get(Next-1, Stmts),
@@ -80,25 +80,29 @@ resolve_steps(Defs, SFN) ->
             {error, {Line, ?MODULE, {output_mismatch, OutStmt, russell_unify:subst(Out, Subst)}}};
         Subst1 ->
             Subst2 =
-                lists:foldl(
-                  fun ({K, V}, S) ->
-                          {var, V1} = russell_unify:subst(V, S),
-                          S#{V1 => {var, K}}
+                maps:fold(
+                  fun(K, V, Acc) ->
+                          russell_unify:unify({var, K}, V, Acc)
                   end,
                   Subst1,
-                  maps:to_list(Vars)),
+                  Vars),
 
-            Stmts1 = maps:map(fun(_, V) -> russell_unify:subst(V, Subst2) end, Stmts),
+            case normalize_subst(Subst2) of
+                error ->
+                    {error, {Line, ?MODULE, {output_mismatch, OutStmt, russell_unify:subst(Out, Subst2)}}};
+                {ok, Subst3} ->
+                    Stmts1 = maps:map(fun(_, V) -> russell_unify:subst(V, Subst3) end, Stmts),
 
-            lists:foreach(
-              fun({N,V}) ->
-                      io:format(
-                        "(~s) ~s~n",
-                        [N,russell_def:format_tokens(maps:get(V, Stmts1))])
-              end,
-              maps:to_list(Names1)),
+                    lists:foreach(
+                      fun({N,V}) ->
+                              io:format(
+                                "(~s) ~s~n",
+                                [N,russell_def:format_tokens(maps:get(V, Stmts1))])
+                      end,
+                      maps:to_list(Names1)),
 
-            {ok, Name, InStmts, Next-1, Stmts1, Steps1}
+                    {ok, Name, InStmts, Next-1, Stmts1, Steps1, NextVar2}
+            end
     end.
 
 resolve_steps([], State, _) ->
@@ -243,7 +247,7 @@ unify(N, X, Y, State=#{subst := Subst, stmts := Stmts}, {Name, Line}) ->
     end.
 
 
-resolve_unproven(Inputs, Out, Stmts, Proven, Defs) ->
+resolve_unproven(Inputs, Out, NextVar, Stmts, Proven, Defs) ->
     {Unbound, Bound} =
         lists:partition(
           fun ({_, V}) ->
@@ -265,6 +269,7 @@ resolve_unproven(Inputs, Out, Stmts, Proven, Defs) ->
             Choices =
                 russell_usearch:search(
                   [maps:get(V, Stmts) || {_,V} <- Unbound],
+                  NextVar,
                   Defs),
 
             case search_unbound_choices(Choices, Unbound, State1, Stmts, Defs) of

@@ -1,125 +1,115 @@
 -module(russell_usearch).
 
--export([search/2]).
+-export([search/3]).
 
--export([contains_unbound/1]).
+-export([contains_unbound/1, normalize_subst/1]).
 
-search(Stmts, Defs) ->
-    case search_stmts(none, Stmts, Defs) of
-        none ->
-            [];
-        Choices ->
-            [C || C <- sets:to_list(Choices),
-                  not contains_unbound(russell_unify:subst(Stmts, C))
-            ]
+search(Stmts, Next, Defs) ->
+    to_list(
+      lists:foldl(
+        fun(C, Acc) ->
+                union(from_list(search_choice(C, Stmts, Next, Defs)), Acc)
+        end,
+        none,
+        to_list(search_stmts(none, Stmts, Next, Defs)))).
+
+search_choice(Subst, Stmts, Next, Defs) ->
+    Stmts1 =
+        [ S
+          || S <- russell_unify:subst(Stmts, Subst),
+             contains_unbound(S)],
+
+    case Stmts1 of
+        [] ->
+            [Subst];
+        _ ->
+            [maps:merge(C, Subst) || C <- search(Stmts1, Next, Defs)]
     end.
 
 
-search_stmts(Acc, [], _) ->
+search_stmts(Acc, [], _, _) ->
     Acc;
-search_stmts(Acc, [H|T], Defs) ->
-    search_stmts(product(Acc, search_stmt([H], Defs)), T, Defs).
+search_stmts(Acc, [H|T], Next, Defs) ->
+    search_stmts(product(Acc, search_stmt([H], Next, Defs)), T, Next, Defs).
 
 
-search_stmt([Stmt|Stack], Defs) ->
+search_stmt([Stmt|Stack], Next, Defs) ->
     case lists:member(Stmt, Stack) of
         true ->
             none;
         false ->
-            search_stmt(none, Defs, [Stmt|Stack], Defs)
+            case contains_bound(Stmt) of
+                false ->
+                    none;
+                true ->
+                    Unbound = unbound_vars(Stmt),
+                    Stack1 = [Stmt|Stack],
+
+                    lists:foldl(
+                      fun(X, Acc) ->
+                              union(search_stmt(X, Stack1, Unbound, Next, Defs), Acc)
+                      end,
+                      none,
+                      Defs)
+            end
     end.
 
-search_stmt(Acc, [], _, _) ->
-    Acc;
-search_stmt(Acc, [H|T], Stack, Defs) ->
-    search_stmt(union(search_stmt(H, Stack, Defs), Acc), T, Stack, Defs).
 
-
-search_stmt({_, {Ins, Out}}, [Stmt|_]=Stack, Defs) ->
-    case match_unify(Out, Stmt, #{}, #{}) of
-        error ->
+search_stmt({_, {Ins, Out}}, [Stmt|_]=Stack, Unbound, Next, Defs) ->
+    {Out1, Map, Next1} = russell_def:subst(Out, #{}, Next),
+    case russell_unify:unify(Out1, Stmt, #{}) of
+        false ->
             none;
-        {ok, Map, Subst} ->
+        Subst ->
             case normalize_subst(Subst) of
                 error ->
                     none;
                 {ok, Subst1} ->
-                    Bound = maps:filter(fun(_, V) -> not contains_unbound(V) end, Subst1),
+                    Choices =
+                        case contains_unbound(russell_unify:subst(Stmt, Subst1)) of
+                            false ->
+                                [Subst1];
+                            true ->
+                                to_list(
+                                  lists:foldl(
+                                    fun (X, Acc) ->
+                                            case russell_def:subst(X, Map, 0) of
+                                                {X1, _, 0} ->
+                                                    X2 = russell_unify:subst(X1, Subst1),
+                                                    case contains_unbound(X2) of
+                                                        false ->
+                                                            Acc;
+                                                        true ->
+                                                            product(search_stmt([X2|Stack], Next1, Defs), Acc)
+                                                    end;
+                                                _ ->
+                                                    Acc
+                                            end
+                                    end,
+                                    none,
+                                    Ins))
+                        end,
 
-                    case contains_unbound(russell_unify:subst(Stmt, Subst1)) of
-                        false ->
-                            sets:from_list([Bound]);
-                        true ->
-                            case search_inputs(none, Ins, Map, Stack, Subst1, Defs) of
-                                none ->
-                                    case maps:size(Bound) of
-                                        0 ->
-                                            none;
-                                        _ ->
-                                            sets:from_list([Bound])
-                                    end;
-                                Choices ->
-                                    sets:from_list(
-                                      [ maps:merge(Bound, C)
-                                        || C <- sets:to_list(Choices) ])
-                            end
+                    Choices1 =
+                        [ maps:filter(
+                            fun(_, V) ->
+                                    not contains_unbound(V)
+                            end,
+                            maps:with(Unbound, russell_unify:compress(maps:merge(Subst1, C))))
+                          || C <- Choices],
+
+                    case [ C
+                           || C <- Choices1,
+                              maps:size(C) > 0]
+                    of
+                        [] ->
+                            none;
+                        Choices2 ->
+                            sets:from_list(Choices2)
                     end
             end
     end.
 
-search_inputs(Acc, [], _, _, _, _) ->
-    Acc;
-search_inputs(Acc, [H|T], Map, Stack, Subst, Defs) ->
-    Choices = search_input(H, Map, Stack, Subst, Defs),
-    search_inputs(product(Choices, Acc), T, Map, Stack, Subst, Defs).
-
-search_input(Stmt, Map, Stack, Subst, Defs) ->
-    case russell_def:subst(Stmt, Map, 0) of
-        {Stmt1, Map, 0} ->
-            Stmt2 = russell_unify:subst(Stmt1, Subst),
-            case contains_unbound(Stmt2) of
-                false ->
-                    none;
-                true ->
-                    search_stmt([Stmt2|Stack], Defs)
-            end;
-        _ ->
-            none
-    end.
-
-
-match_unify([], [], Map, Subst) ->
-    {ok, Map, Subst};
-match_unify([XH|XT], [YH|YT], Map, Subst) ->
-    case match_unify(XH, YH, Map, Subst) of
-        error ->
-            error;
-        {ok, Map1, Subst1} ->
-            match_unify(XT, YT, Map1, Subst1)
-    end;
-match_unify({var, X}, Y, Map, Subst) ->
-    case maps:find(X, Map) of
-        error ->
-            {ok, Map#{X => Y}, Subst};
-        {ok, X1} ->
-            case russell_unify:unify(X1, Y, Subst) of
-                false ->
-                    error;
-                Subst1 ->
-                    {ok, Map, Subst1}
-            end
-    end;
-match_unify(X, {var, Y}, Map, Subst) when is_atom(X), is_integer(Y) ->
-    case russell_unify:unify(X, {var, Y}, Subst) of
-        false ->
-            error;
-        Subst1 ->
-            {ok, Map, Subst1}
-    end;
-match_unify(X, X, Map, Subst) ->
-    {ok, Map, Subst};
-match_unify(_, _, _, _) ->
-    error.
 
 normalize_subst(Subst) ->
     Subst1 = russell_unify:compress(Subst),
@@ -144,6 +134,26 @@ normalize_subst(Subst) ->
             {ok, russell_unify:compress(Subst2)}
     end.
 
+unbound_vars(X) ->
+    unbound_vars(X, []).
+
+unbound_vars([], Acc) ->
+    Acc;
+unbound_vars([H|T], Acc) ->
+    unbound_vars(T, unbound_vars(H, Acc));
+unbound_vars({var, X}, Acc) when is_integer(X) ->
+    [X|Acc];
+unbound_vars(_, Acc) ->
+    Acc.
+
+contains_bound([]) ->
+    false;
+contains_bound([H|T]) ->
+    contains_bound(H) or contains_bound(T);
+contains_bound({var, X}) when is_atom(X) ->
+    true;
+contains_bound(_) ->
+    false.
 
 contains_unbound([]) ->
     false;
@@ -153,6 +163,16 @@ contains_unbound({var, X}) when is_integer(X) ->
     true;
 contains_unbound(_) ->
     false.
+
+from_list([]) ->
+    none;
+from_list(L) ->
+    sets:from_list(L).
+
+to_list(none) ->
+    [];
+to_list(S) ->
+    sets:to_list(S).
 
 union(none, S) ->
     S;
