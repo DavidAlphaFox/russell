@@ -6,17 +6,12 @@ main(Args) ->
     case catch run(Args) of
         ok ->
             halt(0);
-        Other ->
-            io:format("~p~n", [Other]),
+        {error, _} ->
             halt(1)
     end.
 
-run(["pf",Arg]) ->
-    russell_pf_shell:run([Arg]);
-run(["pf"|Args]) ->
-    russell_verify:run(Args);
-run(["pfs"|Args]) ->
-    russell_pfs:run(Args).
+run(["prim"|Args]) ->
+    russell_prim:run(Args).
 
 file_error(Filename, {error, [_|_]=Errors} = Error) ->
     lists:foreach(

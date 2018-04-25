@@ -39,14 +39,20 @@ format_error({not_found, N, I, Stmt}) ->
 
 resolve(DFN, SFN) ->
     {ok, Defs} = russell:file_error(DFN, russell_def:file(DFN)),
-    {ok, Name, Inputs, Out, Stmts, Proven, NextVar} = russell:file_error(SFN, resolve_steps(maps:from_list(Defs), SFN)),
+    {ok, {Name,Line}, Inputs, Out, Stmts, Proven, NextVar} = russell:file_error(SFN, resolve_steps(maps:from_list(Defs), SFN)),
 
     NIn = length(Inputs),
     Index = lists:seq(1, NIn),
     Proven1 = maps:merge(maps:from_list([{I,I} || I <- Index]), Proven),
 
-    {ok, Proven2} = russell:file_error(SFN, resolve_unproven(Inputs, Out, NextVar, Stmts, Proven1, Defs)),
-    {ok, construct(Name, NIn, Out, Proven2)}.
+    {ok, Proven2} =
+        russell:file_error(
+          SFN,
+          resolve_unproven(
+            Inputs, Out, NextVar, Stmts, Proven1,
+            lists:takewhile(fun ({X,_}) -> X =/= Name end, Defs))),
+
+    {ok, construct({Name,Line}, NIn, Out, Proven2)}.
 
 
 resolve_steps(Defs, SFN) ->

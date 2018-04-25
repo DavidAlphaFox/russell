@@ -2,6 +2,6 @@
 bin/
 _build/
 rebar.lock
-src/russell_lexer.erl
+src/russell_*_lexer.erl
 src/russell_*_parser.erl
 *.pf

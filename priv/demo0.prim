@@ -1,0 +1,34 @@
+tze
+. term 0.
+
+tpl
+  term .T.
+  term .R.
+. term (.T + .R).
+
+a1
+  term .T.
+  term .R.
+  term .S.
+. |- ((.T = .R) -> ((.T = .S) -> (.R = .S))).
+
+a2
+  term .T.
+. |- ((.T + 0) = .T).
+
+mp
+  |- .P.
+  |- (.P -> .Q).
+. |- .Q.
+
+th1
+  term .T.
+. |- (.T = .T).
+
+.th1 1
+  .tze 2
+  .tpl 3 1 2
+  .a1 4 3 1 1
+  .a2 5 1
+  .mp 6 5 4
+  .mp 7 5 6.

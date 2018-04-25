@@ -1,15 +1,7 @@
-PFS_FILES=$(wildcard *.pfs pm/*.pfs)
-PROOFS=$(PFS_FILES:%.pfs=%.pf)
+PRIM_FILES=$(wildcard priv/*.prim)
+PRIMS=$(PRIM_FILES:priv/%.prim=%.prim)
 
-all: $(PROOFS)
+all: $(PRIMS)
 
-pm/%.pf: pm/%.pfs
-	./bin/russell pfs pm.def $< $@
-	./bin/russell pf pm.def $@
-
-%.pf: %.pfs
-	./bin/russell pfs demo0.def $< $@
-	./bin/russell pf demo0.def $@
-
-clean:
-	rm -f $(PROOFS)
+%.prim: priv/%.prim
+	./bin/russell prim "$<"

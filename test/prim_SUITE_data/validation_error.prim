@@ -1,0 +1,8 @@
+.p a a
+ .q b.
+
+.p a
+ .q a.
+
+.p
+ .q b a.
