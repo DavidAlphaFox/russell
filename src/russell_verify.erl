@@ -2,7 +2,8 @@
 
 -export(
    [verify_proof/2, format_error/1,
-    format_tokens/1, format_token/1]).
+    format_tokens/1, format_token/1,
+    find/2, verify_step/5, verify_output/3]).
 
 format_tokens(Tokens) ->
     string:join([format_token(T) || T <- Tokens], " ").
@@ -38,7 +39,7 @@ find({Name, Line}, Defs) ->
             {ok, Def}
     end.
 
-find_exact({_, Line}=Name, NIn, Defs) ->
+find({_, Line}=Name, NIn, Defs) ->
     case find(Name, Defs) of
         {error, _} = Error ->
             Error;
@@ -117,7 +118,7 @@ verify_step(InStmts, {In, Out}, C) ->
     end.
 
 verify_step(Name, InNames, Stmts, Counter, Defs) ->
-    case find_exact(Name, length(InNames), Defs) of
+    case find(Name, length(InNames), Defs) of
         {error, _} = Error ->
             Error;
         {ok, Def} ->
@@ -148,7 +149,7 @@ verify_output(Ins, Out, OutStmt) ->
     match_stmts(Ins ++ [Out], InStmts ++ [OutStmt], #{}).
 
 verify_proof({Name, InNames, Steps}, Defs) ->
-    case find_exact(Name, length(InNames), Defs) of
+    case find(Name, length(InNames), Defs) of
         {error, _} = Error ->
             Error;
         {ok, {InStmts, OutStmt}} ->

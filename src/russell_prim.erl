@@ -2,7 +2,8 @@
 
 -export(
    [run/1, format_error/1,
-    parse/1]).
+    parse/1, validate_uses/2, verify_form/2,
+    format_stmts/1, format_stmt/1, format_steps/1]).
 
 run([Filename]) ->
     case parse(Filename) of
@@ -79,12 +80,15 @@ validate_form({proof, {_, In}, Body}) ->
     end.
 
 validate_stmt({_, [Out|In]}, Def) ->
-    case fold(fun validate_use/2, Def, In) of
+    case validate_uses(In, Def) of
         {error, _} = Error ->
             Error;
         {ok, Def1} ->
             validate_def(Out, Def1)
     end.
+
+validate_uses(Names, Def) ->
+    fold(fun validate_use/2, Def, Names).
 
 validate_def({S, Line}, Def) ->
     case sets:is_element(S, Def) of
