@@ -41,13 +41,13 @@ validation_error(C) ->
 
 verify_error(C) ->
     {error,
-     [{1,russell_verify,{def_not_found,p}},
-      {9,russell_verify,{def_not_found,q}},
-      {16,russell_verify,{input_number_mismatch,1,2}},
-      {23,russell_verify,{input_number_mismatch,2,1}},
-      {32,russell_verify,{not_match,_,_}},
-      {49,russell_verify,{not_match,_,_}},
-      {58,russell_verify,{not_match,_,_,_,_}},
+     [{1,russell_core,{def_not_found,p}},
+      {9,russell_core,{def_not_found,q}},
+      {16,russell_core,{input_number_mismatch,1,2}},
+      {23,russell_core,{input_number_mismatch,2,1}},
+      {32,russell_core,{not_match,_,_}},
+      {49,russell_core,{not_match,_,_}},
+      {58,russell_core,{not_match,_,_,_,_}},
       {60,russell_prim,{duplicate_def,p1}}
      ]} =
         run(C, "verify_error.prim"),

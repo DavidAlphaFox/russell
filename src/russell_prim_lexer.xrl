@@ -2,7 +2,7 @@ Definitions.
 
 Atom       = [^().\000-\s]+
 Atom2      = [^().\000-\s][^()\000-\s]*[^().\000-\s]
-Variable   = [.][^().\000-\s]+
+Variable   = [.][^()\000-\s]*[^().\000-\s]
 Whitespace = [\000-\s]+
 Reserved   = [().]
 

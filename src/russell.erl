@@ -13,7 +13,9 @@ main(Args) ->
 run(["prim"|Args]) ->
     russell_prim:run(Args);
 run(["shell"|Args]) ->
-    russell_prim_shell:run(Args).
+    russell_prim_shell:run(Args);
+run(["dem"|Args]) ->
+    russell_dem:run(Args).
 
 file_error(Filename, {error, [_|_]=Errors} = Error) ->
     lists:foreach(

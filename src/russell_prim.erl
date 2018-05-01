@@ -3,7 +3,8 @@
 -export(
    [run/1, format_error/1,
     parse/1, validate_uses/2, verify_form/2,
-    format_stmts/1, format_stmt/1, format_steps/1]).
+    format_stmts/1, format_stmt/1, format_steps/1,
+    format/1]).
 
 run([Filename]) ->
     case parse(Filename) of
@@ -32,25 +33,25 @@ parse(Filename) ->
         {error, enoent} ->
             russell:file_error(?MODULE, {error, {?LINE, ?MODULE, {file_not_exist, Filename}}});
         {ok, Bin} ->
-            case parse_string(binary_to_list(Bin)) of
-                {ok, Forms} ->
-                    case validate_forms(Forms) of
-                        [] ->
-                            {ok, Forms};
-                        Errors ->
-                            russell:file_error(Filename, {error, Errors})
-                    end;
-                Error ->
-                    russell:file_error(Filename, Error)
-            end
+            russell:file_error(Filename, parse_string(binary_to_list(Bin)))
     end.
 
 parse_string(String) ->
     case russell_prim_lexer:string(String) of
         {ok, Tokens, _} ->
-            russell_prim_parser:parse(Tokens);
-        Error ->
-            Error
+            case russell_prim_parser:parse(Tokens) of
+                {ok, Forms} ->
+                    case validate_forms(Forms) of
+                        [] ->
+                            {ok, Forms};
+                        Errors ->
+                            {error, Errors}
+                    end;
+                Error ->
+                    Error
+            end;
+        {error, Error, _} ->
+            {error, Error}
     end.
 
 validate_forms([]) ->
@@ -126,7 +127,7 @@ verify_form({def, {Name, Line}, Ins, Out}, Defs) ->
             {ok, Defs#{Name => {Ins, Out}}}
     end;
 verify_form({proof, {{N,_}=Name, In}, Body}, Defs) ->
-    case russell_verify:verify_proof({Name, In, Body}, Defs) of
+    case russell_core:verify_proof({Name, In, Body}, Defs) of
         {error, _} = Error ->
             Error;
         {error, Error, Ins, Steps} ->
@@ -162,7 +163,7 @@ format_stmts(Stmts) ->
 format_stmt({{Name, _}, Tokens}) ->
     io_lib:format(
       "(~ts) ~ts",
-      [Name, russell_verify:format_tokens(Tokens)]).
+      [Name, russell_core:format_tokens(Tokens)]).
 
 
 format_steps(Steps) ->
@@ -174,3 +175,25 @@ format_step({{{Name,_}, Ins}, Stmt}) ->
       [Name,
        [io_lib:format(" ~ts",[A]) || {A,_} <- Ins],
        format_stmt(Stmt)]).
+
+
+format(Forms) ->
+    string:join([format_form(F) || F <- Forms], "\n").
+
+format_form({def, {Name, _}, Ins, Out}) ->
+    io_lib:format(
+      "~ts~n~ts. ~ts.~n",
+      [Name,
+       [["  ", russell_core:format_tokens(In), ".\n"]
+        || In <- Ins],
+       russell_core:format_tokens(Out)]);
+format_form({proof, Head, Body}) ->
+    [string:join([format_pf_step(S) || S <- [Head|Body]], "\n "),
+     ".\n"].
+
+format_pf_step({{Name,_}, Ins}) ->
+    io_lib:format(
+      ".~ts~ts",
+      [Name,
+       [io_lib:format(" ~ts",[A])
+        || {A,_} <- Ins]]).

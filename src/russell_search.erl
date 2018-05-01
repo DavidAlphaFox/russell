@@ -21,11 +21,11 @@ search_stmt([Stmt|Stack], State = #{known := Known}, Defs) ->
 search_stmt(_, [], State, _) ->
     {not_found, State};
 search_stmt([Stmt|_] = Stack, [{Name, {Ins, Out}}|T], State, Defs) ->
-    case russell_def:match(Out, Stmt, #{}) of
+    case russell_core:match(Out, Stmt, #{}) of
         {error, _} ->
             search_stmt(Stack, T, State, Defs);
         {ok, Vars} ->
-            case russell_def:subst(Ins, Vars, 0) of
+            case russell_core:subst(Ins, Vars, 0) of
                 {Ins1, Vars, 0} ->
                     case search_stmts(Ins1, Stack, State, Defs) of
                         {not_found, _} ->

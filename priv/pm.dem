@@ -1,0 +1,21 @@
+p : prop
+q : prop
+r : prop
+s : prop
+
+@1.7 .Pp
+. (~ p) : prop
+
+@1.71 .Pp
+. (p \/ q) : prop
+
+@1.01 .Df
+  (p -> q) : ((~ p) \/ q)
+
+@1.1 .Pp
+  |- p
+  |- (p -> q)
+. |- q
+
+@1.2 .Pp
+. |- ((p \/ p) -> p)

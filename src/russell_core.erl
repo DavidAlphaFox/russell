@@ -1,9 +1,9 @@
--module(russell_verify).
+-module(russell_core).
 
 -export(
    [verify_proof/2, format_error/1,
     format_tokens/1, format_token/1,
-    find/2, verify_step/5, verify_output/3]).
+    find/2, subst/3, match/3, verify_step/5, verify_output/3]).
 
 format_tokens(Tokens) ->
     string:join([format_token(T) || T <- Tokens], " ").

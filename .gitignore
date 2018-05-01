@@ -4,4 +4,4 @@ _build/
 rebar.lock
 src/russell_*_lexer.erl
 src/russell_*_parser.erl
-*.pf
+priv/*.prim
