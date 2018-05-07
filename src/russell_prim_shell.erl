@@ -70,19 +70,19 @@ handle_tokens(Tokens, State, Defs) ->
 eval_cmd(quit, [], _, _) ->
     halt();
 eval_cmd(def, [Name], State, Defs) ->
-    case russell_verify:find(Name, Defs) of
+    case russell_core:find(Name, Defs) of
         {error, _} = Error ->
             Error;
         {ok, {In, Out}} ->
             io:format(
               "~ts. ~ts.~n",
-              [[["  ",russell_verify:format_tokens(I), ".\n"]
+              [[["  ",russell_core:format_tokens(I), ".\n"]
                 || I <- In],
-               russell_verify:format_tokens(Out)]),
+               russell_core:format_tokens(Out)]),
             {ok, State}
     end;
 eval_cmd(prove, [Name], _, Defs) ->
-    case russell_verify:find(Name, Defs) of
+    case russell_core:find(Name, Defs) of
         {error, _} = Error ->
             Error;
         {ok, {In, Out}} ->
@@ -98,7 +98,7 @@ eval_cmd(prove, [Name], _, Defs) ->
     end;
 eval_cmd(qed, [], {prove, State = #{input := Ins, steps := Steps, goal := Goal}}, _) ->
     {_, Out} = lists:last(Steps),
-    case russell_verify:verify_output(Ins, Out, Goal) of
+    case russell_core:verify_output(Ins, Out, Goal) of
         {error, _} = Error ->
             Error;
         _ ->
@@ -108,7 +108,7 @@ eval_cmd(qed, [], {prove, State = #{input := Ins, steps := Steps, goal := Goal}}
 eval_cmd(save, [], {done, State = #{name := Name, steps := Steps, input := Ins}}, _) ->
     io:format(
       "~ts",
-      [format_proof(Name, [I || {I,_} <-Ins], [{N,[O|I]} || {{N,I},{O,_}} <- Steps])]),
+      [russell_prim:format([{proof, {Name, [I || {I,_} <-Ins]}, [{N,[O|I]} || {{N,I},{O,_}} <- Steps]}])]),
     {ok, State};
 eval_cmd(dump, [], {Type, State}, _) ->
     show_all(State),
@@ -123,7 +123,7 @@ eval_step(Name, Ins, {prove, State = #{stmts := Stmts, counter := Counter}}, Def
         {error, _} = Error ->
             Error;
         {ok, _} ->
-            case russell_verify:verify_step(Name, Ins, Stmts, Counter, Defs) of
+            case russell_core:verify_step(Name, Ins, Stmts, Counter, Defs) of
                 {error, _} = Error ->
                     Error;
                 {ok, OutStmt, Counter1} ->
@@ -148,17 +148,3 @@ add_stmt(Stmt, State = #{next := Next, stmts := Stmts}) ->
     Name = list_to_atom(integer_to_list(Next)),
     io:format("~ts~n", [russell_prim:format_stmt({{Name, 1}, Stmt})]),
     {Name, State#{next => Next + 1, stmts => Stmts#{Name => Stmt}}}.
-
-
-format_proof(Name, In, Body) ->
-    [format_step({Name, In}),
-     "\n",
-     string:join([[" ", format_step(S)] || S <- Body], "\n"),
-     ".\n"].
-
-format_step({{Name,_}, Names}) ->
-    io_lib:format(
-      ".~ts~ts",
-      [Name,
-       [io_lib:format(" ~ts",[A])
-        || {A,_} <- Names]]).

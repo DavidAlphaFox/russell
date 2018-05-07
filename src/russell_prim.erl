@@ -188,7 +188,7 @@ format_form({def, {Name, _}, Ins, Out}) ->
         || In <- Ins],
        russell_core:format_tokens(Out)]);
 format_form({proof, Head, Body}) ->
-    [string:join([format_pf_step(S) || S <- [Head|Body]], "\n "),
+    [string:join([format_pf_step(S) || S <- [Head|Body]], "\n  "),
      ".\n"].
 
 format_pf_step({{Name,_}, Ins}) ->

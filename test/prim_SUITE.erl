@@ -9,7 +9,8 @@ all() ->
      validation_error,
      verify_error,
      unbound,
-     demo0].
+     demo0,
+     format].
 
 parse(C, F) ->
     Filename = filename:join(?config(data_dir, C), F),
@@ -61,4 +62,11 @@ demo0(_) ->
     ok =
         russell_prim:run(
           [filename:join(code:lib_dir(russell, priv), "demo0.prim")]),
+    ok.
+
+format(_) ->
+    Filename = filename:join(code:lib_dir(russell, priv), "demo0.prim"),
+    {ok, Forms} = russell_prim:parse(Filename),
+    {ok, Bin} = file:read_file(Filename),
+    Bin = iolist_to_binary(russell_prim:format(Forms)),
     ok.
