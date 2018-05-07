@@ -109,15 +109,21 @@ verify_form({pp, _, {name, _, {symbol, Line, Name}}, Ins, Out = {assert, _, _}},
 verify_form({df, _, {name, _, {symbol, Line, Name}}, {def, _, _, _}=Def}, State = #{vars := Vars, df := Df}) ->
     [X, ':', Y] = subst_vars(Def, Vars),
     {ok, [def_equal(Name, Line, X, Y, Vars)], State#{df := Df ++ [{X, Y}]}};
-verify_form({prop, _, {name, _, {symbol, Line, Name}}, Ins, Out, Rule}, State = #{defs := Defs}) ->
-    [{def, _, _, Out1}=D1,{def, {Name1, _}, Ins1,_}=D2,P1] = prove_equal('|-<', Name, Line, Ins, Out, State),
+verify_form({prop, _, {name, _, {symbol, Line, Name}}, Ins, Out, Rules}, State = #{defs := Defs}) ->
+    [D1,{def, {Name1, _}, Ins1,_}=D2,P1] = prove_equal('|-<', Name, Line, Ins, Out, State),
+    {ok, N, US} = apply_rules(Rules, Out, new_unify(Ins1), State),
+    {N1, #{proven := Proven}} = unify_to_proof(Ins1, N, US, maps:to_list(Defs)),
+    {ok,
+     [D2, make_proof({Name1, Line}, length(Ins1), N1, Proven), D1, P1],
+     State};
+verify_form({dem, _, {name, _, {symbol, Line, Name}}, Ins, Out, Dem}, State = #{defs := Defs}) ->
+    [D1,{def, {Name1, _}, Ins1,_}=D2,P1] = prove_equal('|-<', Name, Line, Ins, Out, State),
 
-    {ok, N, US} = apply_rules(Rule, Out1, new_unify(Ins1), State),
-
+    {ok, N, US} = apply_dem(Dem, Out, new_unify(Ins1), State),
     {N1, #{proven := Proven}} = unify_to_proof(Ins1, N, US, maps:to_list(Defs)),
 
     {ok,
-     [D2, make_proof({Name1, Line}, length(Ins1), N1, Proven), D1, P1],
+     [D2, make_proof({Name1, Line}, length(Ins1), N1, Proven), D1,P1],
      State}.
 
 def_equal(Name, Line, X, Y, Vars) ->
@@ -275,41 +281,98 @@ new_unify(Ins) ->
        next_stmt => length(Ins)+1,
        stmts => #{},
        steps => #{},
-       subst => #{}}.
+       subst => #{},
+       names => #{}}.
 
 add_stmt(Stmt, State = #{next_stmt := Next, stmts := Stmts}) ->
     {Next, State#{next_stmt => Next + 1, stmts => Stmts#{Next => Stmt}}}.
 
-apply_rules(Rule, Out, US, State = #{df := Df}) ->
-    {ok, N, US1 = #{stmts := Stmts, vars := Vars, next_var := Next, subst := Subst}} = apply_rule(Rule, US, State),
-    Out1 = expand(Out, Df),
+apply_rules(Rules, Out, US, State = #{alias := Alias}) ->
+    Choices = resolve_alias(resolve_precedence([], Rules), Alias),
+    apply_rule_trees(Choices, Out, US, State).
+
+resolve_precedence([{Op1, Pr1}, H1|T1], [H2, Op2={_, Pr2}|T2])
+  when Pr1 =< Pr2 ->
+    resolve_precedence(T1, [{Op1, H1, H2}, Op2|T2]);
+resolve_precedence(Stack, [X, Y|T]) ->
+    resolve_precedence([Y, X|Stack], T);
+resolve_precedence([{Op, _}, X|T], [Y]) ->
+    resolve_precedence(T, [{Op, X, Y}]);
+resolve_precedence([], [X]) ->
+    X.
+
+resolve_alias({num, _, _}=Num, _) ->
+    [Num];
+resolve_alias({name, _, {symbol, _, Name}}, _) ->
+    [Name];
+resolve_alias({symbol, _, Name}, Alias) ->
+    maps:get(Name, Alias);
+resolve_alias({subst, _, X, Y}, Alias) ->
+    [ {subst, X1, Y}
+      || X1 <- resolve_alias(X, Alias)];
+resolve_alias({Op, X, Y}, Alias) ->
+    [ {Op, X1, Y1}
+      || X1 <- resolve_alias(X, Alias),
+         Y1 <- resolve_alias(Y, Alias)].
+
+apply_rule_trees([H|T], Out, US, State) ->
+    case apply_rule_tree(H, Out, US, State) of
+        {ok, N, US1} ->
+            {ok, N, US1};
+        {error, _} ->
+            apply_rule_trees(T, Out, US, State)
+    end.
+
+apply_rule_tree(Tree, Out, US, State = #{df := Df, vars := VarSubst}) ->
+    Out1 = expand(subst_vars(Out, VarSubst), Df),
+    {ok, N, US1 = #{stmts := Stmts, vars := Vars, next_var := Next, subst := Subst}} = apply_rule(Tree, US, State),
     {Out2, Vars, Next}= russell_core:subst(Out1, Vars, Next),
     Out3 = maps:get(N, Stmts),
     Subst1 = russell_unify:unify(Out2, Out3, Subst),
     {ok, N, US1#{subst := Subst1}}.
 
 
-apply_rule({subst, _, {symbol,_,Name}, Subst}, State = #{vars := Vars, next_var := Next}, #{alias := Alias, defs := Defs, vars := VarSubst}) ->
-    [Name1] = maps:get(Name, Alias),
-    {ok, Subst1} = make_subst(Subst, #{}, Vars, VarSubst),
-    {Ins, Out} = maps:get(Name1, Defs),
+apply_rule({1, X, Y}, US, State = #{defs := Defs}) ->
+    {ok, X1, US1} = apply_rule(X, US, State),
+    {ok, Y1, US2 = #{stmts := Stmts, next_var := Next, subst := Subst}} = apply_rule(Y, US1, State),
+
+    {Ins, Out} = maps:get('1.1', Defs),
+    {[_,_,X2,Y2]=Ins1, Subst1, Next1} = russell_core:subst(Ins, #{}, Next),
+    {Out1, _, Next2} = russell_core:subst(Out, Subst1, Next1),
+
+    Subst2 = russell_unify:unify(maps:get(X1,Stmts),X2,Subst),
+    Subst3 = russell_unify:unify(maps:get(Y1,Stmts),Y2,Subst2),
+
+    add_step('1.1', Ins1, Out1, US2#{subst := Subst3, next_var := Next2});
+apply_rule({num, _, {symbol, _, Num}}, State = #{names := Names}, _) ->
+    {ok, maps:get(Num, Names), State};
+apply_rule({subst, Name, Subst}, State = #{vars := Vars, next_var := Next}, #{defs := Defs, vars := VarSubst, df := Df}) ->
+    {ok, Subst1} = make_subst([{K, expand(subst_vars(V, VarSubst), Df)} || {K, V} <- Subst], #{}, Vars),
+    {Ins, Out} = maps:get(Name, Defs),
     {Ins1, Subst2, Next1} = russell_core:subst(Ins, Subst1, Next),
     {Out1, _, Next2} = russell_core:subst(Out, Subst2, Next1),
-    {Ins2, State1} = lists:mapfoldl(fun add_stmt/2, State#{next_var := Next2}, Ins1),
-    {Out2, State2 = #{steps := Steps}} = add_stmt(Out1, State1),
-    {ok, Out2, State2#{steps := Steps#{Out2 => {Name1, Ins2}}}}.
+    add_step(Name, Ins1, Out1, State#{next_var := Next2});
+apply_rule(Name, State = #{next_var := Next}, #{defs := Defs}) when is_atom(Name) ->
+    {Ins, Out} = maps:get(Name, Defs),
+    {Ins1, Subst, Next1} = russell_core:subst(Ins, #{}, Next),
+    {Out1, _, Next2} = russell_core:subst(Out, Subst, Next1),
+    add_step(Name, Ins1, Out1, State#{next_var := Next2}).
 
+add_step(Name, Ins, Out, State) ->
+    {Ins1, State1} = lists:mapfoldl(fun add_stmt/2, State, Ins),
+    {Out1, State2 = #{steps := Steps}} = add_stmt(Out, State1),
+    {ok, Out1, State2#{steps := Steps#{Out1 => {Name, Ins1}}}}.
 
-make_subst([], Subst, Vars, _) ->
+make_subst([], Subst, Vars) ->
     {ok, maps:merge(Vars, Subst)};
-make_subst([{{symbol, Line, V}, Token}|T], Subst, Vars, VarSubst) ->
-    case russell_core:subst(subst_vars(Token, VarSubst), Vars, 0) of
+make_subst([{{symbol, Line, V}, Token}|T], Subst, Vars) ->
+    case russell_core:subst(Token, Vars, 0) of
         {Token1, Vars, 0} ->
             case maps:find(V, Subst) of
                 {ok, _} ->
                     {error, {Line, ?MODULE, {subst_defined, V}}};
                 error ->
-                    make_subst(T, Subst#{V => Token1}, Vars, VarSubst)
+                    make_subst(T, Subst#{V => Token1}, Vars)
             end;
         _ ->
             {error, {Line, ?MODULE, {unbound_var_found, V}}}
@@ -319,8 +382,11 @@ unify_to_proof(Ins, Out, #{vars := Vars, subst := Subst, next_stmt := Next, stmt
     Subst1 =
         maps:merge(
           maps:from_list(
-            [ {V, {var, K}}
-              || {K, {var, V}} <- maps:to_list(Vars) ]),
+            [ begin
+                  {var, V1} = russell_unify:subst(V, Subst),
+                  {V1, {var, K}}
+              end
+              || {K, V} <- maps:to_list(Vars) ]),
           Subst),
 
     {PS, Map} =
@@ -339,6 +405,11 @@ unify_to_proof(Ins, Out, #{vars := Vars, subst := Subst, next_stmt := Next, stmt
           lists:seq(length(Ins) + 1, Next - 1)),
     {maps:get(Out, Map), PS}.
 
+apply_dem([{Rules, Out}], _, US, State) ->
+    apply_rules(Rules, Out, US, State);
+apply_dem([{{num, _, {symbol, _, Num}}, {Rules, Out}}|T], O, US, State) ->
+    {ok, N, US1 = #{names := Names}} = apply_rules(Rules, Out, US, State),
+    apply_dem(T, O, US1#{names := Names#{Num => N}}, State).
 
 make_proof(Name, NIn, N, Steps) ->
     {proof, {Name, [make_name(I) || I <- lists:seq(1, NIn)]},
