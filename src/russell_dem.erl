@@ -432,15 +432,26 @@ fix_prop([H|T], Out) ->
 
 apply_steps([{Rules, {assert, _, P}=Out}|T], US, State) ->
     {ok, N, US1} = apply_rules(Rules, Out, US, State),
-    apply_steps(T, N, P, US1, State).
+    apply_steps1(T, N, P, US1, State);
+apply_steps([{Rules, P, {symbol, _, Sym}, Q}|T], US, State) ->
+    {ok, N, US1} = apply_rules(Rules, ['|-', [P, Sym, Q]], US, State),
+    apply_steps2(T, N, Q, US1, State).
 
-apply_steps([], N, _, US, _) ->
+apply_steps1([], N, _, US, _) ->
     {ok, N, US};
-apply_steps([{symbol, _, Sym}, {Rules, Q}|T], N, P, US, State = #{defs := Defs}) ->
+apply_steps1([{symbol, _, Sym}, {Rules, Q}|T], N, P, US, State = #{defs := Defs}) ->
     {ok, N1, US1} = apply_rules(Rules, ['|-', [P, Sym, Q]], US, State),
     {ok, N2, US2} = apply_def('1.1', [N, N1], #{}, US1, Defs),
-    apply_steps(T, N2, Q, US2, State).
+    apply_steps1(T, N2, Q, US2, State).
 
+apply_steps2([], N, _, US, _) ->
+    {ok, N, US};
+apply_steps2([{symbol, _, Sym}, {Rules, Q}|T], N, P, US, State = #{defs := Defs}) ->
+    {ok, N1, US1} = apply_rules(Rules, ['|-', [P, Sym, Q]], US, State),
+    {ok, N2, US2} = apply_def('2.05', [], #{}, US1, Defs),
+    {ok, N3, US3} = apply_def('1.1', [N1, N2], #{}, US2, Defs),
+    {ok, N4, US4} = apply_def('1.1', [N, N3], #{}, US3, Defs),
+    apply_steps2(T, N4, Q, US4, State).
 
 make_proof(Name, NIn, N, Steps) ->
     {proof, {Name, [make_name(I) || I <- lists:seq(1, NIn)]},
