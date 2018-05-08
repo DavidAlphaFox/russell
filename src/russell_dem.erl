@@ -334,34 +334,46 @@ apply_rule_tree(Tree, Out, US, State = #{df := Df, vars := VarSubst}) ->
 
 apply_rule({1, X, Y}, US, State = #{defs := Defs}) ->
     {ok, X1, US1} = apply_rule(X, US, State),
-    {ok, Y1, US2 = #{stmts := Stmts, next_var := Next, subst := Subst}} = apply_rule(Y, US1, State),
-
-    {Ins, Out} = maps:get('1.1', Defs),
-    {[_,_,X2,Y2]=Ins1, Subst1, Next1} = russell_core:subst(Ins, #{}, Next),
-    {Out1, _, Next2} = russell_core:subst(Out, Subst1, Next1),
-
-    Subst2 = russell_unify:unify(maps:get(X1,Stmts),X2,Subst),
-    Subst3 = russell_unify:unify(maps:get(Y1,Stmts),Y2,Subst2),
-
-    add_step('1.1', Ins1, Out1, US2#{subst := Subst3, next_var := Next2});
+    {ok, Y1, US2} = apply_rule(Y, US1, State),
+    apply_def('1.1', [X1, Y1], #{}, US2, Defs);
+apply_rule({2, X, Y}, US, State = #{defs := Defs}) ->
+    {ok, X1, US1} = apply_rule(X, US, State),
+    {ok, Y1, US2} = apply_rule(Y, US1, State),
+    {ok, N1, US3} = apply_def('2.05', [], #{}, US2, Defs),
+    {ok, N2, US4} = apply_def('1.1', [Y1, N1], #{}, US3, Defs),
+    apply_def('1.1', [X1, N2], #{}, US4, Defs);
 apply_rule({num, _, {symbol, _, Num}}, State = #{names := Names}, _) ->
     {ok, maps:get(Num, Names), State};
-apply_rule({subst, Name, Subst}, State = #{vars := Vars, next_var := Next}, #{defs := Defs, vars := VarSubst, df := Df}) ->
+apply_rule({subst, Name, Subst}, State = #{vars := Vars}, #{defs := Defs, vars := VarSubst, df := Df}) ->
     {ok, Subst1} = make_subst([{K, expand(subst_vars(V, VarSubst), Df)} || {K, V} <- Subst], #{}, Vars),
-    {Ins, Out} = maps:get(Name, Defs),
-    {Ins1, Subst2, Next1} = russell_core:subst(Ins, Subst1, Next),
-    {Out1, _, Next2} = russell_core:subst(Out, Subst2, Next1),
-    add_step(Name, Ins1, Out1, State#{next_var := Next2});
-apply_rule(Name, State = #{next_var := Next}, #{defs := Defs}) when is_atom(Name) ->
-    {Ins, Out} = maps:get(Name, Defs),
-    {Ins1, Subst, Next1} = russell_core:subst(Ins, #{}, Next),
-    {Out1, _, Next2} = russell_core:subst(Out, Subst, Next1),
-    add_step(Name, Ins1, Out1, State#{next_var := Next2}).
+    apply_def(Name, [], Subst1, State, Defs);
+apply_rule(Name, State, #{defs := Defs}) when is_atom(Name) ->
+    apply_def(Name, [], #{}, State, Defs).
+
+apply_def(Name, Inputs, Subst, State, Defs) ->
+    {Ins, Out, State1 = #{stmts := Stmts, subst := Subst1}} = subst_def(Name, Subst, State, Defs),
+    Inputs1 = [maps:get(I, Stmts) || I <- Inputs],
+    Ins1 = lists:nthtail(length(Ins) - length(Inputs), Ins),
+    Subst2 =
+        lists:foldl(
+          fun ({X, Y}, S) ->
+                  russell_unify:unify(X, Y, S)
+          end,
+          Subst1,
+          lists:zip(Inputs1, Ins1)),
+    add_step(Name, Ins, Out, State1#{subst := Subst2}).
 
 add_step(Name, Ins, Out, State) ->
     {Ins1, State1} = lists:mapfoldl(fun add_stmt/2, State, Ins),
     {Out1, State2 = #{steps := Steps}} = add_stmt(Out, State1),
     {ok, Out1, State2#{steps := Steps#{Out1 => {Name, Ins1}}}}.
+
+subst_def(Name, Subst, State = #{next_var := Next}, Defs) ->
+    {Ins, Out} = maps:get(Name, Defs),
+    {Ins1, Subst1, Next1} = russell_core:subst(Ins, Subst, Next),
+    {Out1, _, Next2} = russell_core:subst(Out, Subst1, Next1),
+    {Ins1, Out1, State#{next_var := Next2}}.
+
 
 make_subst([], Subst, Vars) ->
     {ok, maps:merge(Vars, Subst)};
@@ -405,11 +417,23 @@ unify_to_proof(Ins, Out, #{vars := Vars, subst := Subst, next_stmt := Next, stmt
           lists:seq(length(Ins) + 1, Next - 1)),
     {maps:get(Out, Map), PS}.
 
-apply_dem([{Rules, Out}], _, US, State) ->
-    apply_rules(Rules, Out, US, State);
-apply_dem([{{num, _, {symbol, _, Num}}, {Rules, Out}}|T], O, US, State) ->
-    {ok, N, US1 = #{names := Names}} = apply_rules(Rules, Out, US, State),
+apply_dem([Steps], _, US, State) ->
+    apply_steps(Steps, US, State);
+apply_dem([{{num, _, {symbol, _, Num}}, Steps}|T], O, US, State) ->
+    {ok, N, US1 = #{names := Names}} = apply_steps(Steps, US, State),
     apply_dem(T, O, US1#{names := Names#{Num => N}}, State).
+
+apply_steps([{Rules, ['|-', P]=Out}|T], US, State) ->
+    {ok, N, US1} = apply_rules(Rules, Out, US, State),
+    apply_steps(T, N, P, US1, State).
+
+apply_steps([], N, _, US, _) ->
+    {ok, N, US};
+apply_steps([{symbol, _, Sym}, {Rules, Q}|T], N, P, US, State = #{defs := Defs}) ->
+    {ok, N1, US1} = apply_rules(Rules, ['|-', [P, Sym, Q]], US, State),
+    {ok, N2, US2} = apply_def('1.1', [N, N1], #{}, US1, Defs),
+    apply_steps(T, N2, Q, US2, State).
+
 
 make_proof(Name, NIn, N, Steps) ->
     {proof, {Name, [make_name(I) || I <- lists:seq(1, NIn)]},

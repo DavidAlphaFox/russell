@@ -1,4 +1,4 @@
-Nonterminals forms form stmts stmt dem step bracket rules rule op dot colon num substs subst names name def assert tokens token.
+Nonterminals forms form stmts stmt dem abbr1 step bracket rules rule op dot colon num substs subst names name def assert tokens token.
 Terminals symbol '(' ')' '[' ']' ':' '@' '.' '|-' '.Pp' '.Df' '.Dem'.
 Rootsymbol forms.
 
@@ -95,8 +95,14 @@ rules -> rule:
 bracket -> '[' rules ']':
   '$2'.
 
-step -> bracket '|-' token:
-  {'$1', ['|-', '$3']}.
+abbr1 -> abbr1 bracket symbol token:
+  '$1' ++ ['$3', {'$2', '$4'}].
+
+abbr1 -> bracket '|-' token:
+  [{'$1', ['|-', '$3']}].
+
+step -> abbr1:
+  '$1'.
 
 dem -> step num dem:
   [{'$2', '$1'}|'$3'].
