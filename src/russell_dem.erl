@@ -417,13 +417,20 @@ unify_to_proof(Ins, Out, #{vars := Vars, subst := Subst, next_stmt := Next, stmt
           lists:seq(length(Ins) + 1, Next - 1)),
     {maps:get(Out, Map), PS}.
 
-apply_dem([Steps], _, US, State) ->
-    apply_steps(Steps, US, State);
+apply_dem([Steps], Out, US, State) ->
+    apply_steps(fix_prop(Steps, Out), US, State);
 apply_dem([{{num, _, {symbol, _, Num}}, Steps}|T], O, US, State) ->
     {ok, N, US1 = #{names := Names}} = apply_steps(Steps, US, State),
     apply_dem(T, O, US1#{names := Names#{Num => N}}, State).
 
-apply_steps([{Rules, ['|-', P]=Out}|T], US, State) ->
+fix_prop([], _) ->
+    [];
+fix_prop([{Rules, {'.Prop', _}}], Out) ->
+    [{Rules, Out}];
+fix_prop([H|T], Out) ->
+    [H|fix_prop(T, Out)].
+
+apply_steps([{Rules, {assert, _, P}=Out}|T], US, State) ->
     {ok, N, US1} = apply_rules(Rules, Out, US, State),
     apply_steps(T, N, P, US1, State).
 
