@@ -21,8 +21,13 @@ run([Filename|Args]) ->
     end.
 
 format_error({file_not_exist, Filename}) ->
-    io_lib:format("~ts: file not exist", [Filename]).
-
+    io_lib:format("~ts: file not exist", [Filename]);
+format_error({alias_not_found, Name}) ->
+    io_lib:format("alias not found: ~ts", [Name]);
+format_error({unbound_var_found, V}) ->
+    io_lib:format("unbound variable found in substitution of ~ts", [V]);
+format_error({subst_defined, V}) ->
+    io_lib:format("substituion of ~ts already defined", [V]).
 
 parse(Filename) ->
     case file:read_file(Filename) of
@@ -111,20 +116,27 @@ verify_form({df, _, {name, _, {symbol, Line, Name}}, {def, _, _, _}=Def}, State 
     {ok, [def_equal(Name, Line, X, Y, Vars)], State#{df := Df ++ [{X, Y}]}};
 verify_form({prop, _, {name, _, {symbol, Line, Name}}, Ins, Out, Rules}, State = #{defs := Defs}) ->
     [D1,{def, {Name1, _}, Ins1,_}=D2,P1] = prove_equal('|-<', Name, Line, Ins, Out, State),
-    {ok, N, US} = apply_rules(Rules, Out, new_unify(Ins1), State),
-    {N1, #{proven := Proven}} = unify_to_proof(Ins1, N, US, maps:to_list(Defs)),
-    {ok,
-     [D2, make_proof({Name1, Line}, length(Ins1), N1, Proven), D1, P1],
-     State};
+    case apply_rules(Rules, Out, new_unify(Ins1), State) of
+        {error, _} = Error ->
+            Error;
+        {ok, N, US} ->
+            {N1, #{proven := Proven}} = unify_to_proof(Ins1, N, US, maps:to_list(Defs)),
+            {ok,
+             [D2, make_proof({Name1, Line}, length(Ins1), N1, Proven), D1, P1],
+             State}
+    end;
 verify_form({dem, _, {name, _, {symbol, Line, Name}}, Ins, Out, Dem}, State = #{defs := Defs}) ->
     [D1,{def, {Name1, _}, Ins1,_}=D2,P1] = prove_equal('|-<', Name, Line, Ins, Out, State),
 
-    {ok, N, US} = apply_dem(Dem, Out, new_unify(Ins1), State),
-    {N1, #{proven := Proven}} = unify_to_proof(Ins1, N, US, maps:to_list(Defs)),
-
-    {ok,
-     [D2, make_proof({Name1, Line}, length(Ins1), N1, Proven), D1,P1],
-     State}.
+    case apply_dem(Dem, Out, new_unify(Ins1), State) of
+        {error, _} = Error ->
+            Error;
+        {ok, N, US} ->
+            {N1, #{proven := Proven}} = unify_to_proof(Ins1, N, US, maps:to_list(Defs)),
+            {ok,
+             [D2, make_proof({Name1, Line}, length(Ins1), N1, Proven), D1,P1],
+             State}
+    end.
 
 def_equal(Name, Line, X, Y, Vars) ->
     {def, {Name, Line}, equals(vars(X), Vars), [suffix(X, "1"), '=', suffix(Y, "2")]}.
@@ -292,8 +304,12 @@ apply_rules(Rules, Out, US = #{vars := Vars}, State = #{alias := Alias, vars := 
         {error, _} = Error ->
             Error;
         {ok, Tree} ->
-            Choices = resolve_alias(Tree, Alias),
-            apply_rule_trees(Choices, Out, US, State)
+            case resolve_alias(Tree, Alias) of
+                {error, _} = Error ->
+                    Error;
+                {ok, Choices} ->
+                    apply_rule_trees(Choices, Out, US, State)
+            end
     end.
 
 resolve_precedence([{Op1, Pr1}, H1|T1], [H2, Op2={_, Pr2}|T2])
@@ -349,23 +365,39 @@ make_subst([{{symbol, Line, V}, Token}|T], Subst, Vars) ->
     end.
 
 resolve_alias({num, _, _}=Num, _) ->
-    [Num];
+    {ok, [Num]};
 resolve_alias({name, _, {symbol, _, Name}}, _) ->
-    [Name];
-resolve_alias({symbol, _, Name}, Alias) ->
-    maps:get(Name, Alias);
+    {ok, [Name]};
+resolve_alias({symbol, Line, Name}, Alias) ->
+    case maps:find(Name, Alias) of
+        error ->
+            {error, {Line, ?MODULE, {alias_not_found, Name}}};
+        {ok, Names} ->
+            {ok, Names}
+    end;
 resolve_alias({subst, X, Y}, Alias) ->
-    [ {subst, X1, Y}
-      || X1 <- resolve_alias(X, Alias)];
+    case resolve_alias(X, Alias) of
+        {error, _} = Error ->
+            Error;
+        {ok, X1} ->
+            {ok, [{subst, X2, Y} || X2 <- X1]}
+    end;
 resolve_alias({Op, X, Y}, Alias) ->
-    [ {Op, X1, Y1}
-      || X1 <- resolve_alias(X, Alias),
-         Y1 <- resolve_alias(Y, Alias)].
+    case resolve_alias(X, Alias) of
+        {error, _} = Error ->
+            Error;
+        {ok, X1} ->
+            case resolve_alias(Y, Alias) of
+                {error, _} = Error ->
+                    Error;
+                {ok, Y1} ->
+                    {ok, [{Op, X2, Y2} || X2 <- X1, Y2 <- Y1]}
+            end
+    end.
 
 apply_rule_trees([], _, _, _) ->
     {error, unification};
 apply_rule_trees([H|T], Out, US, State) ->
-    io:format("~p~n", [[H|T]]),
     case apply_rule_tree(H, Out, US, State) of
         {ok, N, US1} ->
             {ok, N, US1};
