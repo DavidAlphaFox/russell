@@ -1,0 +1,4 @@
+@p .Pp . |- p
+@q . |- p
+.Dem
+[@p p p p p . @p] |- .Prop

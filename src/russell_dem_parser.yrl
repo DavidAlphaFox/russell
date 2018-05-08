@@ -93,7 +93,7 @@ rules -> rule:
   ['$1'].
 
 bracket -> '[' rules ']':
-  '$2'.
+  {rules, line_of('$1'), '$2'}.
 
 step -> step bracket symbol token:
   '$1' ++ ['$3', {'$2', '$4'}].
