@@ -1,7 +1,34 @@
+>>> 
+>>> .
+ERROR: syntax error before: '.'
+>>> .def th1
+  term .T.
+. |- (.T = .T).
+>>> .def unknown
+ERROR: definition unknown not found
+>>> .unknown
+ERROR: unknown command unknown
+>>> unknown
+ERROR: proof step not allowed
+>>> .prove unknown
+ERROR: definition unknown not found
 >>> .prove th1
 (1) term .T
+>>> .dump
+  (1) term .T
+
+>>> x 2
+ERROR: statement '2' not found.
+>>> x 1
+ERROR: definition x not found
 >>> tze
 (2) term 0
+>>> .qed
+ERROR: statement mismatch
+  Expected:
+    |- (.T = .T)
+  Got:
+    term 0
 >>> tpl 1 2
 (3) term (.T + 0)
 >>> a1 3 1 1

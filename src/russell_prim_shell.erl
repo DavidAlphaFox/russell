@@ -96,7 +96,7 @@ eval_cmd(prove, [Name], _, Defs) ->
             {In1, State2} = add_stmts(In, State1),
             {ok, {prove, State2#{input => lists:zip([{I,1} || I <- In1], In)}}}
     end;
-eval_cmd(qed, [], {prove, State = #{input := Ins, steps := Steps, goal := Goal}}, _) ->
+eval_cmd(qed, [], {prove, State = #{input := Ins, steps := Steps=[_|_], goal := Goal}}, _) ->
     {_, Out} = lists:last(Steps),
     case russell_core:verify_output(Ins, Out, Goal) of
         {error, _} = Error ->
