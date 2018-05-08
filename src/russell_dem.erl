@@ -287,9 +287,14 @@ new_unify(Ins) ->
 add_stmt(Stmt, State = #{next_stmt := Next, stmts := Stmts}) ->
     {Next, State#{next_stmt => Next + 1, stmts => Stmts#{Next => Stmt}}}.
 
-apply_rules(Rules, Out, US, State = #{alias := Alias}) ->
-    Choices = resolve_alias(resolve_precedence([], Rules), Alias),
-    apply_rule_trees(Choices, Out, US, State).
+apply_rules(Rules, Out, US = #{vars := Vars}, State = #{alias := Alias, vars := VarSubst, df := Df}) ->
+    case resolve_subst(resolve_precedence([], Rules), VarSubst, Df, Vars) of
+        {error, _} = Error ->
+            Error;
+        {ok, Tree} ->
+            Choices = resolve_alias(Tree, Alias),
+            apply_rule_trees(Choices, Out, US, State)
+    end.
 
 resolve_precedence([{Op1, Pr1}, H1|T1], [H2, Op2={_, Pr2}|T2])
   when Pr1 =< Pr2 ->
@@ -301,79 +306,32 @@ resolve_precedence([{Op, _}, X|T], [Y]) ->
 resolve_precedence([], [X]) ->
     X.
 
-resolve_alias({num, _, _}=Num, _) ->
-    [Num];
-resolve_alias({name, _, {symbol, _, Name}}, _) ->
-    [Name];
-resolve_alias({symbol, _, Name}, Alias) ->
-    maps:get(Name, Alias);
-resolve_alias({subst, _, X, Y}, Alias) ->
-    [ {subst, X1, Y}
-      || X1 <- resolve_alias(X, Alias)];
-resolve_alias({Op, X, Y}, Alias) ->
-    [ {Op, X1, Y1}
-      || X1 <- resolve_alias(X, Alias),
-         Y1 <- resolve_alias(Y, Alias)].
-
-apply_rule_trees([H|T], Out, US, State) ->
-    case apply_rule_tree(H, Out, US, State) of
-        {ok, N, US1} ->
-            {ok, N, US1};
-        {error, _} ->
-            apply_rule_trees(T, Out, US, State)
+resolve_subst({T, _, _}=X, _, _, _)
+  when T =:= num; T =:= name; T =:= symbol->
+    {ok, X};
+resolve_subst({subst, _, X, Y}, VarSubst, Df, Vars) ->
+    case make_subst(
+           [{K, expand(subst_vars(V, VarSubst), Df)}
+            || {K, V} <- Y],
+           #{}, Vars)
+    of
+        {error, _} = Error ->
+            Error;
+        {ok, Y1} ->
+            {ok, {subst, X, Y1}}
+    end;
+resolve_subst({Op, X, Y}, VarSubst, Df, Vars) ->
+    case resolve_subst(X, VarSubst, Df, Vars) of
+        {error, _} = Error ->
+            Error;
+        {ok, X1} ->
+            case resolve_subst(Y, VarSubst, Df, Vars) of
+                {error, _} = Error ->
+                    Error;
+                {ok, Y1} ->
+                    {ok, {Op, X1, Y1}}
+            end
     end.
-
-apply_rule_tree(Tree, Out, US, State = #{df := Df, vars := VarSubst}) ->
-    Out1 = expand(subst_vars(Out, VarSubst), Df),
-    {ok, N, US1 = #{stmts := Stmts, vars := Vars, next_var := Next, subst := Subst}} = apply_rule(Tree, US, State),
-    {Out2, Vars, Next}= russell_core:subst(Out1, Vars, Next),
-    Out3 = maps:get(N, Stmts),
-    Subst1 = russell_unify:unify(Out2, Out3, Subst),
-    {ok, N, US1#{subst := Subst1}}.
-
-
-apply_rule({1, X, Y}, US, State = #{defs := Defs}) ->
-    {ok, X1, US1} = apply_rule(X, US, State),
-    {ok, Y1, US2} = apply_rule(Y, US1, State),
-    apply_def('1.1', [X1, Y1], #{}, US2, Defs);
-apply_rule({2, X, Y}, US, State = #{defs := Defs}) ->
-    {ok, X1, US1} = apply_rule(X, US, State),
-    {ok, Y1, US2} = apply_rule(Y, US1, State),
-    {ok, N1, US3} = apply_def('2.05', [], #{}, US2, Defs),
-    {ok, N2, US4} = apply_def('1.1', [Y1, N1], #{}, US3, Defs),
-    apply_def('1.1', [X1, N2], #{}, US4, Defs);
-apply_rule({num, _, {symbol, _, Num}}, State = #{names := Names}, _) ->
-    {ok, maps:get(Num, Names), State};
-apply_rule({subst, Name, Subst}, State = #{vars := Vars}, #{defs := Defs, vars := VarSubst, df := Df}) ->
-    {ok, Subst1} = make_subst([{K, expand(subst_vars(V, VarSubst), Df)} || {K, V} <- Subst], #{}, Vars),
-    apply_def(Name, [], Subst1, State, Defs);
-apply_rule(Name, State, #{defs := Defs}) when is_atom(Name) ->
-    apply_def(Name, [], #{}, State, Defs).
-
-apply_def(Name, Inputs, Subst, State, Defs) ->
-    {Ins, Out, State1 = #{stmts := Stmts, subst := Subst1}} = subst_def(Name, Subst, State, Defs),
-    Inputs1 = [maps:get(I, Stmts) || I <- Inputs],
-    Ins1 = lists:nthtail(length(Ins) - length(Inputs), Ins),
-    Subst2 =
-        lists:foldl(
-          fun ({X, Y}, S) ->
-                  russell_unify:unify(X, Y, S)
-          end,
-          Subst1,
-          lists:zip(Inputs1, Ins1)),
-    add_step(Name, Ins, Out, State1#{subst := Subst2}).
-
-add_step(Name, Ins, Out, State) ->
-    {Ins1, State1} = lists:mapfoldl(fun add_stmt/2, State, Ins),
-    {Out1, State2 = #{steps := Steps}} = add_stmt(Out, State1),
-    {ok, Out1, State2#{steps := Steps#{Out1 => {Name, Ins1}}}}.
-
-subst_def(Name, Subst, State = #{next_var := Next}, Defs) ->
-    {Ins, Out} = maps:get(Name, Defs),
-    {Ins1, Subst1, Next1} = russell_core:subst(Ins, Subst, Next),
-    {Out1, _, Next2} = russell_core:subst(Out, Subst1, Next1),
-    {Ins1, Out1, State#{next_var := Next2}}.
-
 
 make_subst([], Subst, Vars) ->
     {ok, maps:merge(Vars, Subst)};
@@ -389,6 +347,147 @@ make_subst([{{symbol, Line, V}, Token}|T], Subst, Vars) ->
         _ ->
             {error, {Line, ?MODULE, {unbound_var_found, V}}}
     end.
+
+resolve_alias({num, _, _}=Num, _) ->
+    [Num];
+resolve_alias({name, _, {symbol, _, Name}}, _) ->
+    [Name];
+resolve_alias({symbol, _, Name}, Alias) ->
+    maps:get(Name, Alias);
+resolve_alias({subst, X, Y}, Alias) ->
+    [ {subst, X1, Y}
+      || X1 <- resolve_alias(X, Alias)];
+resolve_alias({Op, X, Y}, Alias) ->
+    [ {Op, X1, Y1}
+      || X1 <- resolve_alias(X, Alias),
+         Y1 <- resolve_alias(Y, Alias)].
+
+apply_rule_trees([], _, _, _) ->
+    {error, unification};
+apply_rule_trees([H|T], Out, US, State) ->
+    io:format("~p~n", [[H|T]]),
+    case apply_rule_tree(H, Out, US, State) of
+        {ok, N, US1} ->
+            {ok, N, US1};
+        {error, unification} ->
+            apply_rule_trees(T, Out, US, State);
+        {error, _} = Error ->
+            Error
+    end.
+
+apply_rule_tree(Tree, Out, US, State = #{df := Df, vars := VarSubst}) ->
+    case apply_rule(Tree, US, State) of
+        {error, _} = Error ->
+            Error;
+        {ok, N, US1 = #{stmts := Stmts, vars := Vars, next_var := Next, subst := Subst}} ->
+            Out1 = expand(subst_vars(Out, VarSubst), Df),
+            {Out2, Vars, Next}= russell_core:subst(Out1, Vars, Next),
+            Out3 = maps:get(N, Stmts),
+            case russell_unify:unify(Out2, Out3, Subst) of
+                false ->
+                    {error, unification};
+                Subst1 ->
+                    case validate_subst(Subst1, Vars) of
+                        false ->
+                            {error, unification};
+                        true ->
+                            {ok, N, US1#{subst := Subst1}}
+                    end
+            end
+    end.
+
+validate_subst(Subst, Vars) ->
+    Vars1 = maps:map(fun(_, V) -> russell_unify:subst(V, Subst) end, Vars),
+    case lists:all(fun({var, X}) when is_integer(X) -> true; (_) -> false end, maps:values(Vars1)) of
+        false ->
+            false;
+        true ->
+            Vars2 = maps:to_list(Vars1),
+            Subst1 =
+                maps:merge(
+                  maps:from_list([{I, {var,K}} || {K,{var,I}} <- Vars2]),
+                  Subst),
+            lists:all(fun({K,V}) -> russell_unify:subst(V, Subst1) =:= {var, K} end, Vars2)
+    end.
+
+apply_rule({1, X, Y}, US, State = #{defs := Defs}) ->
+    case apply_rule(X, US, State) of
+        {error, _} = Error ->
+            Error;
+        {ok, X1, US1} ->
+            case apply_rule(Y, US1, State) of
+                {error, _} = Error ->
+                    Error;
+                {ok, Y1, US2} ->
+                    apply_def({'1.1', [X1, Y1]}, US2, Defs)
+            end
+    end;
+apply_rule({2, X, Y}, US, State = #{defs := Defs}) ->
+    case apply_rule(X, US, State) of
+        {error, _} = Error ->
+            Error;
+        {ok, X1, US1} ->
+            case apply_rule(Y, US1, State) of
+                {error, _} = Error ->
+                    Error;
+                {ok, Y1, US2} ->
+                    apply_def({'1.1', [X1, {'1.1', [Y1, {'2.05', []}]}]}, US2, Defs)
+            end
+    end;
+apply_rule({num, _, {symbol, _, Num}}, State = #{names := Names}, _) ->
+    {ok, maps:get(Num, Names), State};
+apply_rule({subst, Name, Subst}, State, #{defs := Defs}) ->
+    apply_def(Name, [], Subst, State, Defs);
+apply_rule(Name, State, #{defs := Defs}) when is_atom(Name) ->
+    apply_def(Name, [], #{}, State, Defs).
+
+apply_def({Name, Ins}, State, Defs) ->
+    case apply_defs(Ins, State, Defs) of
+        {error, _} = Error ->
+            Error;
+        {ok, Ins1, State1}  ->
+            apply_def(Name, Ins1, #{}, State1, Defs)
+    end;
+apply_def(X, State, _) ->
+    {ok, X, State}.
+
+apply_defs([], State, _) ->
+    {ok, [], State};
+apply_defs([H|T], State, Defs) ->
+    case apply_def(H, State, Defs) of
+        {error, _} = Error ->
+            Error;
+        {ok, H1, State1} ->
+            case apply_defs(T, State1, Defs) of
+                {error, _} = Error ->
+                    Error;
+                {ok, T1, State2} ->
+                    {ok, [H1|T1], State2}
+            end
+    end.
+
+apply_def(Name, Inputs, Subst, State, Defs) ->
+    {Ins, Out, State1 = #{stmts := Stmts, subst := Subst1}} = subst_def(Name, Subst, State, Defs),
+    Inputs1 = [maps:get(I, Stmts) || I <- Inputs],
+    Ins1 = lists:nthtail(length(Ins) - length(Inputs), Ins),
+    case russell_unify:unify(Inputs1, Ins1, Subst1) of
+        false ->
+            {error, unification};
+        Subst2 ->
+            add_step(Name, Ins, Out, State1#{subst := Subst2})
+    end.
+
+add_step(Name, Ins, Out, State) ->
+    {Ins1, State1} = lists:mapfoldl(fun add_stmt/2, State, Ins),
+    {Out1, State2 = #{steps := Steps}} = add_stmt(Out, State1),
+    {ok, Out1, State2#{steps := Steps#{Out1 => {Name, Ins1}}}}.
+
+subst_def(Name, Subst, State = #{next_var := Next}, Defs) ->
+    {Ins, Out} = maps:get(Name, Defs),
+    {Ins1, Subst1, Next1} = russell_core:subst(Ins, Subst, Next),
+    {Out1, _, Next2} = russell_core:subst(Out, Subst1, Next1),
+    {Ins1, Out1, State#{next_var := Next2}}.
+
 
 unify_to_proof(Ins, Out, #{vars := Vars, subst := Subst, next_stmt := Next, stmts := Stmts, steps := Steps}, Defs) ->
     Subst1 =
@@ -441,16 +540,14 @@ apply_steps1([], N, _, US, _) ->
     {ok, N, US};
 apply_steps1([{symbol, _, Sym}, {Rules, Q}|T], N, P, US, State = #{defs := Defs}) ->
     {ok, N1, US1} = apply_rules(Rules, ['|-', [P, Sym, Q]], US, State),
-    {ok, N2, US2} = apply_def('1.1', [N, N1], #{}, US1, Defs),
+    {ok, N2, US2} = apply_def({'1.1', [N, N1]}, US1, Defs),
     apply_steps1(T, N2, Q, US2, State).
 
 apply_steps2([], N, _, US, _) ->
     {ok, N, US};
 apply_steps2([{symbol, _, Sym}, {Rules, Q}|T], N, P, US, State = #{defs := Defs}) ->
     {ok, N1, US1} = apply_rules(Rules, ['|-', [P, Sym, Q]], US, State),
-    {ok, N2, US2} = apply_def('2.05', [], #{}, US1, Defs),
-    {ok, N3, US3} = apply_def('1.1', [N1, N2], #{}, US2, Defs),
-    {ok, N4, US4} = apply_def('1.1', [N, N3], #{}, US3, Defs),
+    {ok, N4, US4} = apply_def({'1.1', [N, {'1.1', [N1, {'2.05', []}]}]}, US1, Defs),
     apply_steps2(T, N4, Q, US4, State).
 
 make_proof(Name, NIn, N, Steps) ->
