@@ -11,6 +11,7 @@ all() ->
      num_not_found,
      def_not_found,
      alias_not_found,
+     alias_def_not_found,
      unification,
      pm].
 
@@ -53,8 +54,13 @@ alias_not_found(C) ->
         run(C, "alias_not_found.dem"),
     ok.
 
+alias_def_not_found(C) ->
+    {error,[{1,russell_dem,{def_not_found,p}}]} =
+        run(C, "alias_def_not_found.dem"),
+    ok.
+
 unification(C) ->
-    {error,{4,russell_dem,unification}} =
+    {error,{6,russell_dem,unification}} =
         run(C, "unification.dem"),
     ok.
 
