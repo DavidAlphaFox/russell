@@ -14,12 +14,12 @@ all() ->
 
 parse(C, F) ->
     Filename = filename:join(?config(data_dir, C), F),
-    russell_prim:run([Filename]),
+    russell:run(["prim", "verify", Filename]),
     russell_prim:parse(Filename).
 
 run(C, F) ->
     Filename = filename:join(?config(data_dir, C), F),
-    russell_prim:run([Filename]).
+    russell:run(["prim", "verify", Filename]).
 
 file_not_exist(C) ->
     {error, {_, russell_prim, {file_not_exist, _}}} =
@@ -60,7 +60,7 @@ unbound(C) ->
 
 demo0(_) ->
     ok =
-        russell_prim:run(
+        russell_prim_verify:run(
           [filename:join(code:lib_dir(russell, priv), "demo0.prim")]),
     ok.
 

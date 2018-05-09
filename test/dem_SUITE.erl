@@ -16,7 +16,7 @@ all() ->
 
 run(C, F) ->
     Filename = filename:join(?config(data_dir, C), F),
-    russell_dem:run([Filename]).
+    russell:run(["dem", Filename]).
 
 file_not_exist(C) ->
     {error, {_, russell_dem, {file_not_exist, _}}} =

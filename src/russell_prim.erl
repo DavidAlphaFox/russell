@@ -6,18 +6,10 @@
     format_stmts/1, format_stmt/1, format_steps/1,
     format/1]).
 
-run([Filename]) ->
-    case parse(Filename) of
-        {ok, Forms} ->
-            case verify_forms(Forms, #{}) of
-                [] ->
-                    ok;
-                Errors ->
-                    russell:file_error(Filename, {error, Errors})
-            end;
-        {error, _} = Error ->
-            Error
-    end.
+run(["verify"|Args]) ->
+    russell_prim_verify:run(Args);
+run(["shell"|Args]) ->
+    russell_prim_shell:run(Args).
 
 format_error({file_not_exist, Filename}) ->
     io_lib:format("~ts: file not exist", [Filename]);
@@ -106,18 +98,6 @@ validate_use({S, Line}, Def) ->
         true ->
             {ok, Def}
     end.
-
-
-verify_forms([], _) ->
-    [];
-verify_forms([H|T], Defs) ->
-    case verify_form(H, Defs) of
-        {ok, Defs1} ->
-            verify_forms(T, Defs1);
-        {error, Error} ->
-            [Error|verify_forms(T, Defs)]
-    end.
-
 
 verify_form({def, {Name, Line}, Ins, Out}, Defs) ->
     case maps:is_key(Name, Defs) of

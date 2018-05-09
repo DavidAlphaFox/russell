@@ -1,6 +1,6 @@
 -module(russell).
 
--export([main/1, file_error/2]).
+-export([main/1, run/1, file_error/2]).
 
 main(Args) ->
     case catch run(Args) of
@@ -12,8 +12,6 @@ main(Args) ->
 
 run(["prim"|Args]) ->
     russell_prim:run(Args);
-run(["shell"|Args]) ->
-    russell_prim_shell:run(Args);
 run(["dem"|Args]) ->
     russell_dem:run(Args).
 

@@ -6,7 +6,7 @@ PRIMS=$(PRIM_FILES:priv/%.prim=%.prim) $(DEM_FILES:priv/%.dem=%.prim)
 all: $(PRIMS)
 
 %.prim: priv/%.prim
-	./bin/russell prim "$<"
+	./bin/russell prim verify "$<"
 
 priv/%.prim: priv/%.dem
 	./bin/russell dem "$<" "$@"

@@ -1,6 +1,6 @@
 -module(russell_unify).
 
--export([unify/3, subst/2, compress/1]).
+-export([unify/3, subst/2]).
 
 lookup(K, S) ->
     case maps:find(K, S) of
@@ -81,8 +81,3 @@ unify(X, X, S) when is_atom(X) ->
     S;
 unify(_, _, _) ->
     false.
-
-compress(Subst) ->
-    maps:map(
-      fun(_, V) -> subst(V, Subst) end,
-      Subst).

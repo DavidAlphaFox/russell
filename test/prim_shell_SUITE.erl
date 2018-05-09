@@ -54,7 +54,7 @@ start_verify_session(Text, Args) ->
     process_flag(trap_exit, true),
     G = group_leader(),
     group_leader(self(), self()),
-    Shell = spawn_link(fun() -> russell_prim_shell:run(Args) end),
+    Shell = spawn_link(fun() -> russell:run(["prim", "shell"|Args]) end),
     group_leader(G, self()),
 
     try
