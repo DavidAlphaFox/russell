@@ -8,6 +8,8 @@
 
 run(["verify"|Args]) ->
     russell_prim_verify:run(Args);
+run(["compile"|Args]) ->
+    russell_prim_compile:run(Args);
 run(["shell"|Args]) ->
     russell_prim_shell:run(Args).
 

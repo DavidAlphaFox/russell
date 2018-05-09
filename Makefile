@@ -1,15 +1,17 @@
 .PRECIOUS: priv/%.prim
 PRIM_FILES=$(wildcard priv/*.prim)
 DEM_FILES=$(wildcard priv/*.dem)
-PRIMS=$(PRIM_FILES:priv/%.prim=%.prim) $(DEM_FILES:priv/%.dem=%.prim)
+BEAM_FILES=$(PRIM_FILES:priv/%.prim=priv/%.beam) $(DEM_FILES:priv/%.dem=priv/%.beam)
 
-all: $(PRIMS)
+all: $(BEAM_FILES)
 
-%.prim: priv/%.prim
+priv/%.beam: priv/%.prim
 	./bin/russell prim verify "$<"
+	./bin/russell prim compile "$<"
+	escript "$@"
 
 priv/%.prim: priv/%.dem
 	./bin/russell dem "$<" "$@"
 
 clean:
-	rm -f $(DEM_FILES:priv/%.dem=priv/%.prim)
+	rm -f $(DEM_FILES:priv/%.dem=priv/%.prim) $(BEAM_FILES)

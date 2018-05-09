@@ -1,4 +1,5 @@
 *~
+*.beam
 bin/
 _build/
 rebar.lock
