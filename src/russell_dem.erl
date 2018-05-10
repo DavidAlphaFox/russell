@@ -109,7 +109,8 @@ verify_form({var, _, {symbol, _, Name}, Token}, State = #{vars := Vars}) ->
 verify_form({alias, _, {symbol, _, Name}, Names}, State = #{alias := Alias, defs := Defs}) ->
     case validate_alias(Names, Defs) of
         [] ->
-            {ok, [], State#{alias := Alias#{Name => [N || {name, _, {symbol, _, N}} <- Names]}}};
+            Names1 = [N || {name, _, {symbol, _, N}} <- Names],
+            {ok, [], State#{alias := Alias#{Name => maps:get(Name, Alias, []) ++ Names1}}};
         Errors ->
             {error, Errors}
     end;
